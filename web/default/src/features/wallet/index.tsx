@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { getSelf } from '@/lib/api'
-import { useStatus } from '@/hooks/use-status'
+import { toast } from 'sonner'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { SectionPageLayout } from '@/components/layout'
 import { AffiliateRewardsCard } from './components/affiliate-rewards-card'
@@ -29,6 +29,7 @@ import { PaymentConfirmDialog } from './components/dialogs/payment-confirm-dialo
 import { TransferDialog } from './components/dialogs/transfer-dialog'
 import { RechargeFormCard } from './components/recharge-form-card'
 import { SubscriptionPlansCard } from './components/subscription-plans-card'
+import { Web3PayCheckout } from './components/web3-pay-checkout'
 import { WalletStatsCard } from './components/wallet-stats-card'
 import { DEFAULT_DISCOUNT_RATE } from './constants'
 import {
@@ -39,10 +40,12 @@ import {
   useCreemPayment,
   useWaffoPayment,
   useWaffoPancakePayment,
+  useWeb3PayPayment,
 } from './hooks'
 import {
   getDefaultPaymentType,
   getMinTopupAmount,
+  isWeb3PayPayment,
   isWaffoPancakePayment,
 } from './lib'
 import type {
@@ -50,6 +53,7 @@ import type {
   PaymentMethod,
   PresetAmount,
   CreemProduct,
+  Web3PayOrder,
 } from './types'
 
 interface WalletProps {
@@ -72,9 +76,9 @@ export function Wallet(props: WalletProps) {
   const [creemDialogOpen, setCreemDialogOpen] = useState(false)
   const [selectedCreemProduct, setSelectedCreemProduct] =
     useState<CreemProduct | null>(null)
+  const [web3PayOrder, setWeb3PayOrder] = useState<Web3PayOrder | null>(null)
   const [showSubscriptionPanel, setShowSubscriptionPanel] = useState(true)
 
-  const { status } = useStatus()
   const { currency } = useSystemConfig()
   const { topupInfo, presetAmounts, loading: topupLoading } = useTopupInfo()
 
@@ -102,6 +106,11 @@ export function Wallet(props: WalletProps) {
   const { processWaffoPayment } = useWaffoPayment()
   const { processing: pancakeProcessing, processWaffoPancakePayment } =
     useWaffoPancakePayment()
+  const {
+    processing: web3PayProcessing,
+    processWeb3PayPayment,
+    isSafeHostedCheckoutUrl,
+  } = useWeb3PayPayment()
 
   // Fetch and refresh user data
   const fetchUser = useCallback(async () => {
@@ -149,6 +158,7 @@ export function Wallet(props: WalletProps) {
 
   // Handle preset selection
   const handleSelectPreset = (preset: PresetAmount) => {
+    setWeb3PayOrder(null)
     setTopupAmount(preset.value)
     setSelectedPreset(preset.value)
     calculatePaymentAmount(preset.value, getCurrentPaymentType())
@@ -156,6 +166,7 @@ export function Wallet(props: WalletProps) {
 
   // Handle topup amount change
   const handleTopupAmountChange = (amount: number) => {
+    setWeb3PayOrder(null)
     setTopupAmount(amount)
     setSelectedPreset(null)
     calculatePaymentAmount(amount, getCurrentPaymentType())
@@ -163,6 +174,7 @@ export function Wallet(props: WalletProps) {
 
   // Handle payment method selection
   const handlePaymentMethodSelect = async (method: PaymentMethod) => {
+    setWeb3PayOrder(null)
     setSelectedPaymentMethod(method)
     setPaymentLoading(method.type)
 
@@ -186,6 +198,26 @@ export function Wallet(props: WalletProps) {
     if (!selectedPaymentMethod) return
 
     const isPancake = isWaffoPancakePayment(selectedPaymentMethod.type)
+    const isWeb3Pay = isWeb3PayPayment(selectedPaymentMethod.type)
+
+    if (isWeb3Pay) {
+      const order = await processWeb3PayPayment(topupAmount)
+      if (order) {
+        setConfirmDialogOpen(false)
+        if (topupInfo?.web3_pay_checkout_mode === 'redirect') {
+          if (order.payUrl && isSafeHostedCheckoutUrl(order.payUrl)) {
+            window.open(order.payUrl, '_blank', 'noopener,noreferrer')
+            toast.success(t('Redirecting to payment page...'))
+            return
+          }
+          toast.error(t('Invalid payment redirect URL'))
+          return
+        }
+        setWeb3PayOrder(order)
+      }
+      return
+    }
+
     const success = isPancake
       ? await processWaffoPancakePayment(topupAmount)
       : await processPayment(topupAmount, selectedPaymentMethod.type)
@@ -293,7 +325,6 @@ export function Wallet(props: WalletProps) {
                   redeeming={redeeming}
                   topupLink={topupInfo?.topup_link}
                   loading={topupLoading}
-                  priceRatio={(status?.price as number) || 1}
                   usdExchangeRate={effectiveUsdExchangeRate}
                   onOpenBilling={() => setBillingDialogOpen(true)}
                   creemProducts={topupInfo?.creem_products}
@@ -306,6 +337,7 @@ export function Wallet(props: WalletProps) {
                   enableWaffoPancakeTopup={
                     topupInfo?.enable_waffo_pancake_topup
                   }
+                  enableWeb3PayTopup={topupInfo?.enable_web3_pay_topup}
                 />
               </div>
 
@@ -314,6 +346,17 @@ export function Wallet(props: WalletProps) {
                 onAvailabilityChange={handleSubscriptionAvailabilityChange}
               />
             </div>
+
+            {web3PayOrder && (
+              <Web3PayCheckout
+                order={web3PayOrder}
+                onCancel={() => setWeb3PayOrder(null)}
+                onPaid={async () => {
+                  setWeb3PayOrder(null)
+                  await fetchUser()
+                }}
+              />
+            )}
 
             <AffiliateRewardsCard
               user={user}
@@ -333,7 +376,7 @@ export function Wallet(props: WalletProps) {
         paymentAmount={paymentAmount}
         paymentMethod={selectedPaymentMethod}
         calculating={calculating}
-        processing={processing || pancakeProcessing}
+        processing={processing || pancakeProcessing || web3PayProcessing}
         discountRate={getDiscountRate()}
         usdExchangeRate={effectiveUsdExchangeRate}
       />

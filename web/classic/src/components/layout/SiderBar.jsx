@@ -26,6 +26,8 @@ import { useSidebarCollapsed } from '../../hooks/common/useSidebarCollapsed';
 import { useSidebar } from '../../hooks/common/useSidebar';
 import { useMinimumLoadingTime } from '../../hooks/common/useMinimumLoadingTime';
 import { isAdmin, isRoot, showError } from '../../helpers';
+import { StatusContext } from '../../context/Status';
+import { parseCustomSidebarMenus } from '../../helpers/customSidebarMenus';
 import SkeletonWrapper from './components/SkeletonWrapper';
 
 import { Nav, Divider, Button } from '@douyinfe/semi-ui';
@@ -36,6 +38,7 @@ const routerMap = {
   token: '/console/token',
   redemption: '/console/redemption',
   topup: '/console/topup',
+  topupPage: '/topup',
   user: '/console/user',
   subscription: '/console/subscription',
   log: '/console/log',
@@ -53,6 +56,7 @@ const routerMap = {
 
 const SiderBar = ({ onNavigate = () => {} }) => {
   const { t } = useTranslation();
+  const [statusState] = React.useContext(StatusContext);
   const [collapsed, toggleCollapsed] = useSidebarCollapsed();
   const {
     isModuleVisible,
@@ -67,6 +71,10 @@ const SiderBar = ({ onNavigate = () => {} }) => {
   const [openedKeys, setOpenedKeys] = useState([]);
   const location = useLocation();
   const [routerMapState, setRouterMapState] = useState(routerMap);
+  const customSidebarMenus = useMemo(
+    () => parseCustomSidebarMenus(statusState?.status?.CustomSidebarMenus),
+    [statusState?.status?.CustomSidebarMenus],
+  );
 
   const workspaceItems = useMemo(() => {
     const items = [
@@ -127,6 +135,11 @@ const SiderBar = ({ onNavigate = () => {} }) => {
       {
         text: t('钱包管理'),
         itemKey: 'topup',
+        to: '/topup',
+      },
+      {
+        text: t('充值页面'),
+        itemKey: 'topupPage',
         to: '/topup',
       },
       {
@@ -201,6 +214,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
   }, [isAdmin(), isRoot(), t, isModuleVisible]);
 
   const chatMenuItems = useMemo(() => {
+    const customMenus = customSidebarMenus.map((menu, index) => ({
+      text: menu.title,
+      itemKey: `customMenu${index}`,
+      to: `/custom-menu/${index}`,
+    }));
+
     const items = [
       {
         text: t('操练场'),
@@ -212,30 +231,45 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         itemKey: 'chat',
         items: chatItems,
       },
+      ...customMenus,
     ];
 
     // 根据配置过滤项目
     const filteredItems = items.filter((item) => {
+      if (item.itemKey.startsWith('customMenu')) {
+        return true;
+      }
       const configVisible = isModuleVisible('chat', item.itemKey);
       return configVisible;
     });
 
     return filteredItems;
-  }, [chatItems, t, isModuleVisible]);
+  }, [chatItems, customSidebarMenus, t, isModuleVisible]);
 
   // 更新路由映射，添加聊天路由
   const updateRouterMapWithChats = (chats) => {
-    const newRouterMap = { ...routerMap };
+    setRouterMapState((currentRouterMap) => {
+      const newRouterMap = { ...currentRouterMap };
 
-    if (Array.isArray(chats) && chats.length > 0) {
-      for (let i = 0; i < chats.length; i++) {
-        newRouterMap['chat' + i] = '/console/chat/' + i;
+      if (Array.isArray(chats) && chats.length > 0) {
+        for (let i = 0; i < chats.length; i++) {
+          newRouterMap['chat' + i] = '/console/chat/' + i;
+        }
       }
-    }
 
-    setRouterMapState(newRouterMap);
-    return newRouterMap;
+      return newRouterMap;
+    });
   };
+
+  useEffect(() => {
+    setRouterMapState((currentRouterMap) => {
+      const nextRouterMap = { ...currentRouterMap };
+      customSidebarMenus.forEach((_, index) => {
+        nextRouterMap[`customMenu${index}`] = `/custom-menu/${index}`;
+      });
+      return nextRouterMap;
+    });
+  }, [customSidebarMenus]);
 
   // 加载聊天项
   useEffect(() => {
@@ -444,7 +478,8 @@ const SiderBar = ({ onNavigate = () => {} }) => {
           }}
         >
           {/* 聊天区域 */}
-          {hasSectionVisibleModules('chat') && (
+          {(hasSectionVisibleModules('chat') ||
+            customSidebarMenus.length > 0) && (
             <div className='sidebar-section'>
               {!collapsed && (
                 <div className='sidebar-group-label'>{t('聊天')}</div>

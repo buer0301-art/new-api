@@ -225,6 +225,13 @@ export type BillingSettings = {
   CreemWebhookSecret: string
   CreemTestMode: boolean
   CreemProducts: string
+  Web3PayEnabled: boolean
+  Web3PayGatewayAPIBase: string
+  Web3PayCheckoutMode: string
+  Web3PayAppKey: string
+  Web3PayApiSecret: string
+  Web3PayUnitPrice: number
+  Web3PayMinTopUp: number
   WaffoEnabled: boolean
   WaffoApiKey: string
   WaffoPrivateKey: string

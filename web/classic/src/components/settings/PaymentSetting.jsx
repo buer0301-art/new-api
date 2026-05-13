@@ -25,6 +25,7 @@ import SettingsPaymentGatewayStripe from '../../pages/Setting/Payment/SettingsPa
 import SettingsPaymentGatewayCreem from '../../pages/Setting/Payment/SettingsPaymentGatewayCreem';
 import SettingsPaymentGatewayWaffo from '../../pages/Setting/Payment/SettingsPaymentGatewayWaffo';
 import SettingsPaymentGatewayWaffoPancake from '../../pages/Setting/Payment/SettingsPaymentGatewayWaffoPancake';
+import SettingsPaymentGatewayWeb3Pay from '../../pages/Setting/Payment/SettingsPaymentGatewayWeb3Pay';
 import { API, showError, toBoolean } from '../../helpers';
 import { useTranslation } from 'react-i18next';
 
@@ -49,6 +50,14 @@ const PaymentSetting = () => {
     StripeUnitPrice: 8.0,
     StripeMinTopUp: 1,
     StripePromotionCodesEnabled: false,
+
+    Web3PayEnabled: false,
+    Web3PayGatewayAPIBase: 'https://pay.example.com/api/gateway/v1',
+    Web3PayCheckoutMode: 'inline',
+    Web3PayAppKey: '',
+    Web3PayApiSecret: '',
+    Web3PayUnitPrice: 1.0,
+    Web3PayMinTopUp: 1,
 
     WaffoPancakeEnabled: false,
     WaffoPancakeSandbox: false,
@@ -108,6 +117,8 @@ const PaymentSetting = () => {
           case 'MinTopUp':
           case 'StripeUnitPrice':
           case 'StripeMinTopUp':
+          case 'Web3PayUnitPrice':
+          case 'Web3PayMinTopUp':
           case 'WaffoPancakeUnitPrice':
           case 'WaffoPancakeMinTopUp':
             newInputs[item.key] = parseFloat(item.value);
@@ -193,6 +204,13 @@ const PaymentSetting = () => {
             </Tabs.TabPane>
             <Tabs.TabPane tab={t('Waffo 设置')} itemKey='waffo'>
               <SettingsPaymentGatewayWaffo
+                options={inputs}
+                refresh={onRefresh}
+                hideSectionTitle
+              />
+            </Tabs.TabPane>
+            <Tabs.TabPane tab={t('Web3 Pay 设置')} itemKey='web3-pay'>
+              <SettingsPaymentGatewayWeb3Pay
                 options={inputs}
                 refresh={onRefresh}
                 hideSectionTitle

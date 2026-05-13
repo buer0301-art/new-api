@@ -39,7 +39,6 @@ import {
   getDiscountLabel,
   getPaymentIcon,
   getMinTopupAmount,
-  calculatePresetPricing,
 } from '../lib'
 import type {
   PaymentMethod,
@@ -67,7 +66,6 @@ interface RechargeFormCardProps {
   redeeming: boolean
   topupLink?: string
   loading?: boolean
-  priceRatio?: number
   usdExchangeRate?: number
   onOpenBilling?: () => void
   creemProducts?: CreemProduct[]
@@ -78,6 +76,7 @@ interface RechargeFormCardProps {
   waffoMinTopup?: number
   onWaffoMethodSelect?: (method: WaffoPayMethod, index: number) => void
   enableWaffoPancakeTopup?: boolean
+  enableWeb3PayTopup?: boolean
 }
 
 export function RechargeFormCard({
@@ -97,7 +96,6 @@ export function RechargeFormCard({
   redeeming,
   topupLink,
   loading,
-  priceRatio = 1,
   usdExchangeRate = 1,
   onOpenBilling,
   creemProducts,
@@ -108,6 +106,7 @@ export function RechargeFormCard({
   waffoMinTopup,
   onWaffoMethodSelect,
   enableWaffoPancakeTopup,
+  enableWeb3PayTopup,
 }: RechargeFormCardProps) {
   const { t } = useTranslation()
   const [localAmount, setLocalAmount] = useState(topupAmount.toString())
@@ -128,7 +127,8 @@ export function RechargeFormCard({
     topupInfo?.enable_online_topup ||
     topupInfo?.enable_stripe_topup ||
     enableWaffoTopup ||
-    enableWaffoPancakeTopup
+    enableWaffoPancakeTopup ||
+    enableWeb3PayTopup
   const hasAnyTopup = hasConfigurableTopup || enableCreemTopup
   const hasStandardPaymentMethods =
     Array.isArray(topupInfo?.pay_methods) && topupInfo.pay_methods.length > 0
@@ -221,17 +221,8 @@ export function RechargeFormCard({
                         preset.discount ||
                         topupInfo?.discount?.[preset.value] ||
                         1.0
-                      const {
-                        displayValue,
-                        actualPrice,
-                        savedAmount,
-                        hasDiscount,
-                      } = calculatePresetPricing(
-                        preset.value,
-                        priceRatio,
-                        discount,
-                        usdExchangeRate
-                      )
+                      const displayValue = preset.value * usdExchangeRate
+                      const hasDiscount = discount < 1.0
                       return (
                         <Button
                           key={index}
@@ -255,13 +246,9 @@ export function RechargeFormCard({
                             )}
                           </div>
                           <div className='text-muted-foreground mt-1.5 w-full text-xs sm:mt-2'>
-                            Pay {formatCurrency(actualPrice)}
-                            {hasDiscount && savedAmount > 0 && (
-                              <span className='text-green-600'>
-                                {' '}
-                                • Save {formatCurrency(savedAmount)}
-                              </span>
-                            )}
+                            {selectedPreset === preset.value
+                              ? `${t('Pay')} ${formatCurrency(paymentAmount)}`
+                              : t('Calculated after selection')}
                           </div>
                         </Button>
                       )

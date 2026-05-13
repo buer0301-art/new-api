@@ -118,8 +118,16 @@ func InitOptionMap() {
 	common.OptionMap["WaffoPancakeCurrency"] = setting.WaffoPancakeCurrency
 	common.OptionMap["WaffoPancakeUnitPrice"] = strconv.FormatFloat(setting.WaffoPancakeUnitPrice, 'f', -1, 64)
 	common.OptionMap["WaffoPancakeMinTopUp"] = strconv.Itoa(setting.WaffoPancakeMinTopUp)
+	common.OptionMap["Web3PayEnabled"] = strconv.FormatBool(setting.Web3PayEnabled)
+	common.OptionMap["Web3PayGatewayAPIBase"] = setting.Web3PayGatewayAPIBase
+	common.OptionMap["Web3PayCheckoutMode"] = setting.Web3PayCheckoutMode
+	common.OptionMap["Web3PayAppKey"] = setting.Web3PayAppKey
+	common.OptionMap["Web3PayApiSecret"] = setting.Web3PayApiSecret
+	common.OptionMap["Web3PayUnitPrice"] = strconv.FormatFloat(setting.Web3PayUnitPrice, 'f', -1, 64)
+	common.OptionMap["Web3PayMinTopUp"] = strconv.Itoa(setting.Web3PayMinTopUp)
 	common.OptionMap["TopupGroupRatio"] = common.TopupGroupRatio2JSONString()
 	common.OptionMap["Chats"] = setting.Chats2JsonString()
+	common.OptionMap["CustomSidebarMenus"] = `[{"title":"在线生图","url":"https://model-go.com/tools/image-ui.html"}]`
 	common.OptionMap["AutoGroups"] = setting.AutoGroups2JsonString()
 	common.OptionMap["DefaultUseAutoGroup"] = strconv.FormatBool(setting.DefaultUseAutoGroup)
 	common.OptionMap["PayMethods"] = operation_setting.PayMethods2JsonString()
@@ -443,6 +451,24 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.WaffoPancakeUnitPrice, _ = strconv.ParseFloat(value, 64)
 	case "WaffoPancakeMinTopUp":
 		setting.WaffoPancakeMinTopUp, _ = strconv.Atoi(value)
+	case "Web3PayEnabled":
+		setting.Web3PayEnabled = value == "true"
+	case "Web3PayGatewayAPIBase":
+		setting.Web3PayGatewayAPIBase = value
+	case "Web3PayCheckoutMode":
+		if value == "redirect" {
+			setting.Web3PayCheckoutMode = "redirect"
+		} else {
+			setting.Web3PayCheckoutMode = "inline"
+		}
+	case "Web3PayAppKey":
+		setting.Web3PayAppKey = value
+	case "Web3PayApiSecret":
+		setting.Web3PayApiSecret = value
+	case "Web3PayUnitPrice":
+		setting.Web3PayUnitPrice, _ = strconv.ParseFloat(value, 64)
+	case "Web3PayMinTopUp":
+		setting.Web3PayMinTopUp, _ = strconv.Atoi(value)
 	case "TopupGroupRatio":
 		err = common.UpdateTopupGroupRatioByJSONString(value)
 	case "GitHubClientId":

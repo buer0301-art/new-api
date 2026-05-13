@@ -39,6 +39,7 @@ import InvitationCard from './InvitationCard';
 import TransferModal from './modals/TransferModal';
 import PaymentConfirmModal from './modals/PaymentConfirmModal';
 import TopupHistoryModal from './modals/TopupHistoryModal';
+import Web3PayCheckout from './Web3PayCheckout';
 
 const TopUp = () => {
   const { t } = useTranslation();
@@ -56,7 +57,6 @@ const TopUp = () => {
   const [enableOnlineTopUp, setEnableOnlineTopUp] = useState(
     statusState?.status?.enable_online_topup || false,
   );
-  const [priceRatio, setPriceRatio] = useState(statusState?.status?.price || 1);
 
   const [enableStripeTopUp, setEnableStripeTopUp] = useState(
     statusState?.status?.enable_stripe_topup || false,
@@ -75,6 +75,9 @@ const TopUp = () => {
   const [waffoMinTopUp, setWaffoMinTopUp] = useState(1);
   const [enableWaffoPancakeTopUp, setEnableWaffoPancakeTopUp] = useState(false);
   const [waffoPancakeMinTopUp, setWaffoPancakeMinTopUp] = useState(1);
+  const [enableWeb3PayTopUp, setEnableWeb3PayTopUp] = useState(false);
+  const [web3PayCheckoutMode, setWeb3PayCheckoutMode] = useState('inline');
+  const [web3PayOrder, setWeb3PayOrder] = useState(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [open, setOpen] = useState(false);
@@ -135,6 +138,9 @@ const TopUp = () => {
   const requestAmountByPayment = async (payment, value) => {
     if (payment === 'stripe') {
       return getStripeAmount(value);
+    }
+    if (payment === 'web3_pay') {
+      return getWeb3PayAmount(value);
     }
     if (payment === 'waffo_pancake') {
       return getWaffoPancakeAmount(value);
@@ -200,6 +206,11 @@ const TopUp = () => {
         showError(t('管理员未开启 Waffo Pancake 充值！'));
         return;
       }
+    } else if (payment === 'web3_pay') {
+      if (!enableWeb3PayTopUp) {
+        showError(t('管理员未开启 Web3 Pay 充值！'));
+        return;
+      }
     } else if (payment.startsWith('waffo:')) {
       if (!enableWaffoTopUp) {
         showError(t('管理员未开启 Waffo 充值！'));
@@ -231,6 +242,17 @@ const TopUp = () => {
   };
 
   const onlineTopUp = async () => {
+    if (payWay === 'web3_pay') {
+      setConfirmLoading(true);
+      try {
+        await web3PayTopUp();
+      } finally {
+        setOpen(false);
+        setConfirmLoading(false);
+      }
+      return;
+    }
+
     if (payWay === 'waffo_pancake') {
       setConfirmLoading(true);
       try {
@@ -409,6 +431,41 @@ const TopUp = () => {
     }
   };
 
+  const web3PayTopUp = async () => {
+    try {
+      setPaymentLoading(true);
+      const res = await API.post(
+        '/api/user/web3-pay/pay',
+        {
+          amount: parseInt(topUpCount),
+        },
+        { skipErrorHandler: true },
+      );
+      if (res !== undefined) {
+        const { message, data } = res.data;
+        if (message === 'success' && data?.paymentOptions?.length) {
+          if (web3PayCheckoutMode === 'redirect') {
+            if (data.payUrl) {
+              window.open(data.payUrl, '_blank', 'noopener,noreferrer');
+              return;
+            }
+            showError(t('Web3 Pay 未返回收银台地址'));
+            return;
+          }
+          setWeb3PayOrder(data);
+        } else {
+          showError(data || t('支付请求失败'));
+        }
+      } else {
+        showError(res);
+      }
+    } catch (e) {
+      showError(t('支付请求失败'));
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
   const getWaffoAmount = async (value) => {
     if (value === undefined) {
       value = topUpCount;
@@ -481,6 +538,37 @@ const TopUp = () => {
       const res = await API.post('/api/user/waffo-pancake/amount', {
         amount: parseInt(value),
       });
+      if (res !== undefined) {
+        const { message, data } = res.data;
+        if (message === 'success') {
+          setAmount(parseFloat(data));
+        } else {
+          setAmount(0);
+          Toast.error({ content: '错误：' + data, id: 'getAmount' });
+        }
+      } else {
+        showError(res);
+      }
+    } catch (err) {
+      // amount fetch failed silently
+    } finally {
+      setAmountLoading(false);
+    }
+  };
+
+  const getWeb3PayAmount = async (value) => {
+    if (value === undefined) {
+      value = topUpCount;
+    }
+    setAmountLoading(true);
+    try {
+      const res = await API.post(
+        '/api/user/web3-pay/amount',
+        {
+          amount: parseInt(value),
+        },
+        { skipErrorHandler: true },
+      );
       if (res !== undefined) {
         const { message, data } = res.data;
         if (message === 'success') {
@@ -589,7 +677,7 @@ const TopUp = () => {
           if (payMethods && payMethods.length > 0) {
             // 检查name和type是否为空
             payMethods = payMethods.filter((method) => {
-              return method.name && method.type;
+              return method.name && method.type && method.type !== 'waffo';
             });
             // 如果没有color，则设置默认颜色
             payMethods = payMethods.map((method) => {
@@ -637,6 +725,7 @@ const TopUp = () => {
           const enableWaffoTopUp = data.enable_waffo_topup || false;
           const enableWaffoPancakeTopUp =
             data.enable_waffo_pancake_topup || false;
+          const enableWeb3PayTopUp = data.enable_web3_pay_topup || false;
           const minTopUpValue = enableOnlineTopUp
             ? data.min_topup
             : enableStripeTopUp
@@ -645,7 +734,9 @@ const TopUp = () => {
                 ? data.waffo_min_topup
                 : enableWaffoPancakeTopUp
                   ? data.waffo_pancake_min_topup
-                : 1;
+                  : enableWeb3PayTopUp
+                    ? data.web3_pay_min_topup
+                    : 1;
           setEnableOnlineTopUp(enableOnlineTopUp);
           setEnableStripeTopUp(enableStripeTopUp);
           setEnableCreemTopUp(enableCreemTopUp);
@@ -654,9 +745,19 @@ const TopUp = () => {
           setWaffoMinTopUp(data.waffo_min_topup || 1);
           setEnableWaffoPancakeTopUp(enableWaffoPancakeTopUp);
           setWaffoPancakeMinTopUp(data.waffo_pancake_min_topup || 1);
+          setEnableWeb3PayTopUp(enableWeb3PayTopUp);
+          setWeb3PayCheckoutMode(
+            data.web3_pay_checkout_mode === 'redirect'
+              ? 'redirect'
+              : 'inline',
+          );
           setMinTopUp(minTopUpValue);
           setTopUpCount(minTopUpValue);
           setTopUpLink(data.topup_link || '');
+          const defaultPayment = payMethods[0]?.type || '';
+          if (defaultPayment) {
+            setPayWay(defaultPayment);
+          }
 
           // 设置 Creem 产品
           try {
@@ -672,7 +773,7 @@ const TopUp = () => {
           }
 
           // 初始化显示实付金额
-          getAmount(minTopUpValue);
+          requestAmountByPayment(defaultPayment, minTopUpValue);
         } catch (e) {
           setPayMethods([]);
         }
@@ -763,8 +864,6 @@ const TopUp = () => {
       // const minTopUpValue = statusState.status.min_topup || 1;
       // setMinTopUp(minTopUpValue);
       // setTopUpCount(minTopUpValue);
-      setPriceRatio(statusState.status.price || 1);
-
       setStatusLoading(false);
     }
   }, [statusState?.status]);
@@ -851,11 +950,11 @@ const TopUp = () => {
   const selectPresetAmount = (preset) => {
     setTopUpCount(preset.value);
     setSelectedPreset(preset.value);
-
-    // 计算实际支付金额，考虑折扣
-    const discount = preset.discount || topupInfo.discount[preset.value] || 1.0;
-    const discountedAmount = preset.value * priceRatio * discount;
-    setAmount(discountedAmount);
+    setWeb3PayOrder(null);
+    requestAmountByPayment(
+      payWay || confirmPayMethods[0]?.type || '',
+      preset.value,
+    );
   };
 
   // 格式化大数字显示
@@ -949,15 +1048,16 @@ const TopUp = () => {
           creemPreTopUp={creemPreTopUp}
           enableWaffoTopUp={enableWaffoTopUp}
           enableWaffoPancakeTopUp={enableWaffoPancakeTopUp}
+          enableWeb3PayTopUp={enableWeb3PayTopUp}
           presetAmounts={presetAmounts}
           selectedPreset={selectedPreset}
           selectPresetAmount={selectPresetAmount}
           formatLargeNumber={formatLargeNumber}
-          priceRatio={priceRatio}
           topUpCount={topUpCount}
           minTopUp={minTopUp}
           renderQuotaWithAmount={renderQuotaWithAmount}
           getAmount={getAmount}
+          requestAmountByPayment={requestAmountByPayment}
           setTopUpCount={setTopUpCount}
           setSelectedPreset={setSelectedPreset}
           renderAmount={renderAmount}
@@ -993,6 +1093,20 @@ const TopUp = () => {
           affLink={affLink}
           handleAffLinkClick={handleAffLinkClick}
         />
+        {web3PayOrder && (
+          <div className='lg:col-span-2'>
+            <Web3PayCheckout
+              t={t}
+              order={web3PayOrder}
+              onCancel={() => setWeb3PayOrder(null)}
+              onPaid={() => {
+                setWeb3PayOrder(null);
+                getUserQuota().then();
+                setOpenHistory(true);
+              }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

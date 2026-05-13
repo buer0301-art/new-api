@@ -54,6 +54,38 @@ export type WaffoPancakePaymentResponse = ApiResponse<
     }
   | string
 >
+export type Web3PayPaymentResponse = ApiResponse<Web3PayOrder>
+
+export interface Web3PayChainOption {
+  address: string
+  chainCode: string
+  chainName: string
+  contract?: string
+  inConfirm?: number
+  logo?: string
+  paymentNotice?: string
+}
+
+export interface Web3PayPaymentOption {
+  code: string
+  logo?: string
+  chain: Web3PayChainOption[]
+}
+
+export interface Web3PayOrder {
+  orderNo: string
+  merchantOrderNo: string
+  orderAmount: string
+  orderCurrency: string
+  payAmount: string
+  payCurrency: string
+  payUrl?: string
+  expireTime?: string
+  status: string
+  attach?: string
+  createdAt?: string
+  paymentOptions: Web3PayPaymentOption[]
+}
 
 /**
  * Creem product configuration
@@ -145,6 +177,12 @@ export interface TopupInfo {
   enable_waffo_pancake_topup?: boolean
   /** Minimum topup amount for Waffo Pancake */
   waffo_pancake_min_topup?: number
+  /** Whether Web3 Pay topup is enabled */
+  enable_web3_pay_topup?: boolean
+  /** Minimum topup amount for Web3 Pay */
+  web3_pay_min_topup?: number
+  /** Web3 Pay checkout behavior */
+  web3_pay_checkout_mode?: 'inline' | 'redirect'
 }
 
 /**
@@ -189,6 +227,11 @@ export interface WaffoPaymentRequest {
  * Waffo Pancake payment request parameters
  */
 export interface WaffoPancakePaymentRequest {
+  /** Topup amount */
+  amount: number
+}
+
+export interface Web3PayPaymentRequest {
   /** Topup amount */
   amount: number
 }

@@ -62,14 +62,20 @@ const PageLayout = () => {
     '/pricing',
   ];
 
-  const shouldHideFooter = cardProPages.includes(location.pathname);
+  const shouldHideFooter =
+    cardProPages.includes(location.pathname) ||
+    location.pathname === '/topup' ||
+    location.pathname.startsWith('/custom-menu/');
 
   const shouldInnerPadding =
     location.pathname.includes('/console') &&
     !location.pathname.startsWith('/console/chat') &&
     location.pathname !== '/console/playground';
 
-  const isConsoleRoute = location.pathname.startsWith('/console');
+  const isConsoleRoute =
+    location.pathname.startsWith('/console') ||
+    location.pathname === '/topup' ||
+    location.pathname.startsWith('/custom-menu/');
   const showSider = isConsoleRoute && (!isMobile || drawerOpen);
 
   useEffect(() => {

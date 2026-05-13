@@ -72,6 +72,7 @@ import {
   Image as ImageIcon,
   CheckSquare,
   CreditCard,
+  ShoppingBag,
   Layers,
   Gift,
   User,
@@ -137,6 +138,8 @@ export function getLucideIcon(key, selected = false) {
       return <CheckSquare {...commonProps} color={iconColor} />;
     case 'topup':
       return <CreditCard {...commonProps} color={iconColor} />;
+    case 'topupPage':
+      return <ShoppingBag {...commonProps} color={iconColor} />;
     case 'channel':
       return <Layers {...commonProps} color={iconColor} />;
     case 'redemption':
@@ -153,6 +156,9 @@ export function getLucideIcon(key, selected = false) {
     case 'setting':
       return <Settings {...commonProps} color={iconColor} />;
     default:
+      if (String(key).startsWith('customMenu')) {
+        return <ShoppingBag {...commonProps} color={iconColor} />;
+      }
       return <CircleUser {...commonProps} color={iconColor} />;
   }
 }

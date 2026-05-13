@@ -165,7 +165,7 @@ const NotificationSettings = ({
         midjourney: true,
         task: true,
       },
-      personal: { enabled: true, topup: true, personal: true },
+      personal: { enabled: true, topup: true, topupPage: true, personal: true },
       admin: {
         enabled: true,
         channel: true,
@@ -279,6 +279,11 @@ const NotificationSettings = ({
       description: t('用户个人功能'),
       modules: [
         { key: 'topup', title: t('钱包管理'), description: t('余额充值管理') },
+        {
+          key: 'topupPage',
+          title: t('充值页面'),
+          description: t('嵌入通用设置中的充值链接'),
+        },
         {
           key: 'personal',
           title: t('个人设置'),

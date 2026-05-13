@@ -154,6 +154,16 @@ const BILLING_SECTIONS = [
           CreemWebhookSecret: settings.CreemWebhookSecret,
           CreemTestMode: settings.CreemTestMode,
           CreemProducts: settings.CreemProducts,
+          Web3PayEnabled: settings.Web3PayEnabled,
+          Web3PayGatewayAPIBase: settings.Web3PayGatewayAPIBase,
+          Web3PayCheckoutMode:
+            settings.Web3PayCheckoutMode === 'redirect'
+              ? 'redirect'
+              : 'inline',
+          Web3PayAppKey: settings.Web3PayAppKey,
+          Web3PayApiSecret: settings.Web3PayApiSecret,
+          Web3PayUnitPrice: settings.Web3PayUnitPrice,
+          Web3PayMinTopUp: settings.Web3PayMinTopUp,
         }}
         waffoDefaultValues={{
           WaffoEnabled: settings.WaffoEnabled ?? false,

@@ -89,12 +89,33 @@ func GetTopUpInfo(c *gin.Context) {
 		}
 	}
 
+	enableWeb3Pay := isWeb3PayTopUpEnabled()
+	if enableWeb3Pay {
+		hasWeb3Pay := false
+		for _, method := range payMethods {
+			if method["type"] == model.PaymentMethodWeb3Pay {
+				hasWeb3Pay = true
+				break
+			}
+		}
+
+		if !hasWeb3Pay {
+			payMethods = append(payMethods, map[string]string{
+				"name":      "Web3 Pay",
+				"type":      model.PaymentMethodWeb3Pay,
+				"color":     "#10B981",
+				"min_topup": strconv.Itoa(setting.Web3PayMinTopUp),
+			})
+		}
+	}
+
 	data := gin.H{
 		"enable_online_topup":        isEpayTopUpEnabled(),
 		"enable_stripe_topup":        isStripeTopUpEnabled(),
 		"enable_creem_topup":         isCreemTopUpEnabled(),
 		"enable_waffo_topup":         enableWaffo,
 		"enable_waffo_pancake_topup": enableWaffoPancake,
+		"enable_web3_pay_topup":      enableWeb3Pay,
 		"waffo_pay_methods": func() interface{} {
 			if enableWaffo {
 				return setting.GetWaffoPayMethods()
@@ -107,6 +128,8 @@ func GetTopUpInfo(c *gin.Context) {
 		"stripe_min_topup":        setting.StripeMinTopUp,
 		"waffo_min_topup":         setting.WaffoMinTopUp,
 		"waffo_pancake_min_topup": setting.WaffoPancakeMinTopUp,
+		"web3_pay_min_topup":      setting.Web3PayMinTopUp,
+		"web3_pay_checkout_mode":  setting.Web3PayCheckoutMode,
 		"amount_options":          operation_setting.GetPaymentSetting().AmountOptions,
 		"discount":                operation_setting.GetPaymentSetting().AmountDiscount,
 		"topup_link":              common.TopUpLink,

@@ -190,6 +190,12 @@ export function useTopupInfo() {
         waffo_pay_methods: parseWaffoPayMethods(
           response.data.waffo_pay_methods
         ),
+        enable_web3_pay_topup: response.data.enable_web3_pay_topup,
+        web3_pay_min_topup: Number(response.data.web3_pay_min_topup) || 0,
+        web3_pay_checkout_mode:
+          response.data.web3_pay_checkout_mode === 'redirect'
+            ? 'redirect'
+            : 'inline',
       }
 
       setTopupInfo(processedData)

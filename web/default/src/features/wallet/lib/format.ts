@@ -47,8 +47,7 @@ export function formatQuotaShort(quota: number): string {
 }
 
 /**
- * Format currency amount that is already in local currency.
- * This is used for payment amounts that have been calculated via priceRatio.
+ * Format currency amount returned by the selected payment provider calculator.
  */
 export function formatCurrency(amount: number | string): string {
   const numeric =
@@ -70,28 +69,4 @@ export function getDiscountLabel(discount: number): string {
   }
   const off = Math.round((1 - discount) * 100)
   return `${off}% OFF`
-}
-
-/**
- * Calculate pricing details for a preset amount
- */
-export function calculatePresetPricing(
-  presetValue: number,
-  priceRatio: number,
-  discount: number,
-  usdExchangeRate: number = 1
-) {
-  const originalPrice = presetValue * priceRatio
-  const actualPrice = originalPrice * discount
-  const savedAmount = originalPrice - actualPrice
-  const hasDiscount = discount < 1.0
-  const displayValue = presetValue * usdExchangeRate
-
-  return {
-    displayValue,
-    originalPrice,
-    actualPrice,
-    savedAmount,
-    hasDiscount,
-  }
 }

@@ -86,6 +86,14 @@ export function isWaffoPancakePayment(paymentType: string): boolean {
   return paymentType === PAYMENT_TYPES.WAFFO_PANCAKE
 }
 
+export function isWaffoPayment(paymentType: string): boolean {
+  return paymentType === PAYMENT_TYPES.WAFFO
+}
+
+export function isWeb3PayPayment(paymentType: string): boolean {
+  return paymentType === PAYMENT_TYPES.WEB3_PAY
+}
+
 /**
  * Get default payment type from topup info
  */
@@ -109,6 +117,10 @@ export function getDefaultPaymentType(topupInfo: TopupInfo | null): string {
 
   if (topupInfo.enable_waffo_pancake_topup) {
     return PAYMENT_TYPES.WAFFO_PANCAKE
+  }
+
+  if (topupInfo.enable_web3_pay_topup) {
+    return PAYMENT_TYPES.WEB3_PAY
   }
 
   return DEFAULT_PAYMENT_TYPE
@@ -136,6 +148,10 @@ export function getMinTopupAmount(topupInfo: TopupInfo | null): number {
 
   if (topupInfo.enable_waffo_pancake_topup) {
     return topupInfo.waffo_pancake_min_topup || DEFAULT_MIN_TOPUP
+  }
+
+  if (topupInfo.enable_web3_pay_topup) {
+    return topupInfo.web3_pay_min_topup || DEFAULT_MIN_TOPUP
   }
 
   return DEFAULT_MIN_TOPUP

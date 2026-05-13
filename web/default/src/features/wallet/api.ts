@@ -38,6 +38,8 @@ import type {
   WaffoPaymentResponse,
   WaffoPancakePaymentRequest,
   WaffoPancakePaymentResponse,
+  Web3PayPaymentRequest,
+  Web3PayPaymentResponse,
 } from './types'
 
 // ============================================================================
@@ -145,12 +147,33 @@ export async function requestWaffoPayment(
 }
 
 /**
+ * Calculate payment amount for Waffo payment
+ */
+export async function calculateWaffoAmount(
+  request: AmountRequest
+): Promise<AmountResponse> {
+  const res = await api.post('/api/user/waffo/amount', request, {
+    skipBusinessError: true,
+  } as Record<string, unknown>)
+  return res.data
+}
+
+/**
  * Calculate payment amount for Waffo Pancake payment
  */
 export async function calculateWaffoPancakeAmount(
   request: AmountRequest
 ): Promise<AmountResponse> {
   const res = await api.post('/api/user/waffo-pancake/amount', request, {
+    skipBusinessError: true,
+  } as Record<string, unknown>)
+  return res.data
+}
+
+export async function calculateWeb3PayAmount(
+  request: AmountRequest
+): Promise<AmountResponse> {
+  const res = await api.post('/api/user/web3-pay/amount', request, {
     skipBusinessError: true,
   } as Record<string, unknown>)
   return res.data
@@ -165,6 +188,27 @@ export async function requestWaffoPancakePayment(
   const res = await api.post('/api/user/waffo-pancake/pay', request, {
     skipBusinessError: true,
   } as Record<string, unknown>)
+  return res.data
+}
+
+export async function requestWeb3PayPayment(
+  request: Web3PayPaymentRequest
+): Promise<Web3PayPaymentResponse> {
+  const res = await api.post('/api/user/web3-pay/pay', request, {
+    skipBusinessError: true,
+  } as Record<string, unknown>)
+  return res.data
+}
+
+export async function getWeb3PayOrderStatus(
+  tradeNo: string
+): Promise<ApiResponse<{ trade_no: string; status: string; complete_time: number }>> {
+  const res = await api.get(
+    `/api/user/web3-pay/order/${encodeURIComponent(tradeNo)}`,
+    {
+      skipBusinessError: true,
+    } as Record<string, unknown>
+  )
   return res.data
 }
 

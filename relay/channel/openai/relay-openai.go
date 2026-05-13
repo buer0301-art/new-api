@@ -592,6 +592,36 @@ func OpenaiHandlerWithUsage(c *gin.Context, info *relaycommon.RelayInfo, resp *h
 	return &usageResp.Usage, nil
 }
 
+func OpenaiImageStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
+	if resp == nil || resp.Body == nil {
+		logger.LogError(c, "invalid response or response body")
+		return nil, types.NewOpenAIError(fmt.Errorf("invalid response"), types.ErrorCodeBadResponse, http.StatusInternalServerError)
+	}
+
+	defer service.CloseResponseBodyGracefully(resp)
+
+	usage := &dto.Usage{}
+	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
+		info.SetFirstResponseTime()
+		info.ReceivedResponseCount++
+
+		var streamResp struct {
+			Usage *dto.Usage `json:"usage"`
+		}
+		if err := common.UnmarshalJsonStr(data, &streamResp); err == nil && service.ValidUsage(streamResp.Usage) {
+			usage = streamResp.Usage
+			applyUsagePostProcessing(info, usage, common.StringToByteSlice(data))
+		}
+
+		if err := helper.StringData(c, data); err != nil {
+			sr.Error(err)
+		}
+	})
+
+	helper.Done(c)
+	return usage, nil
+}
+
 func applyUsagePostProcessing(info *relaycommon.RelayInfo, usage *dto.Usage, responseBody []byte) {
 	if info == nil || usage == nil {
 		return

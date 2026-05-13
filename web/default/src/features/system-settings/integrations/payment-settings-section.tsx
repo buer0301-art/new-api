@@ -121,6 +121,16 @@ const paymentSchema = z.object({
       })
     }
   }),
+  Web3PayEnabled: z.boolean(),
+  Web3PayGatewayAPIBase: z.string().refine((value) => {
+    const trimmed = value.trim()
+    return /^https?:\/\//.test(trimmed)
+  }, 'Provide a valid URL starting with http:// or https://'),
+  Web3PayCheckoutMode: z.enum(['inline', 'redirect']),
+  Web3PayAppKey: z.string(),
+  Web3PayApiSecret: z.string(),
+  Web3PayUnitPrice: z.coerce.number().min(0),
+  Web3PayMinTopUp: z.coerce.number().min(0),
 })
 
 type PaymentFormValues = z.infer<typeof paymentSchema>
@@ -161,6 +171,13 @@ export function PaymentSettingsSection({
       AmountOptions: formatJsonForEditor(defaultValues.AmountOptions),
       AmountDiscount: formatJsonForEditor(defaultValues.AmountDiscount),
       CreemProducts: formatJsonForEditor(defaultValues.CreemProducts),
+      Web3PayEnabled: defaultValues.Web3PayEnabled,
+      Web3PayGatewayAPIBase: defaultValues.Web3PayGatewayAPIBase,
+      Web3PayCheckoutMode: defaultValues.Web3PayCheckoutMode || 'inline',
+      Web3PayAppKey: defaultValues.Web3PayAppKey,
+      Web3PayApiSecret: defaultValues.Web3PayApiSecret,
+      Web3PayUnitPrice: defaultValues.Web3PayUnitPrice,
+      Web3PayMinTopUp: defaultValues.Web3PayMinTopUp,
     },
   })
 
@@ -173,6 +190,13 @@ export function PaymentSettingsSection({
       AmountOptions: formatJsonForEditor(parsedDefaults.AmountOptions),
       AmountDiscount: formatJsonForEditor(parsedDefaults.AmountDiscount),
       CreemProducts: formatJsonForEditor(parsedDefaults.CreemProducts),
+      Web3PayEnabled: parsedDefaults.Web3PayEnabled,
+      Web3PayGatewayAPIBase: parsedDefaults.Web3PayGatewayAPIBase,
+      Web3PayCheckoutMode: parsedDefaults.Web3PayCheckoutMode || 'inline',
+      Web3PayAppKey: parsedDefaults.Web3PayAppKey,
+      Web3PayApiSecret: parsedDefaults.Web3PayApiSecret,
+      Web3PayUnitPrice: parsedDefaults.Web3PayUnitPrice,
+      Web3PayMinTopUp: parsedDefaults.Web3PayMinTopUp,
     })
   }, [defaultsSignature, form])
 
@@ -415,6 +439,92 @@ export function PaymentSettingsSection({
     }
   }
 
+  const saveWeb3PaySettings = async () => {
+    const values = form.getValues()
+    const sanitized = {
+      Web3PayEnabled: values.Web3PayEnabled as boolean,
+      Web3PayGatewayAPIBase: removeTrailingSlash(
+        values.Web3PayGatewayAPIBase.trim()
+      ),
+      Web3PayCheckoutMode:
+        values.Web3PayCheckoutMode === 'redirect' ? 'redirect' : 'inline',
+      Web3PayAppKey: values.Web3PayAppKey.trim(),
+      Web3PayApiSecret: values.Web3PayApiSecret.trim(),
+      Web3PayUnitPrice: values.Web3PayUnitPrice as number,
+      Web3PayMinTopUp: values.Web3PayMinTopUp as number,
+    }
+
+    const initial = {
+      Web3PayEnabled: initialRef.current.Web3PayEnabled,
+      Web3PayGatewayAPIBase: removeTrailingSlash(
+        initialRef.current.Web3PayGatewayAPIBase.trim()
+      ),
+      Web3PayCheckoutMode:
+        initialRef.current.Web3PayCheckoutMode === 'redirect'
+          ? 'redirect'
+          : 'inline',
+      Web3PayAppKey: initialRef.current.Web3PayAppKey.trim(),
+      Web3PayApiSecret: initialRef.current.Web3PayApiSecret.trim(),
+      Web3PayUnitPrice: initialRef.current.Web3PayUnitPrice,
+      Web3PayMinTopUp: initialRef.current.Web3PayMinTopUp,
+    }
+
+    const updates: Array<{ key: string; value: string | number | boolean }> = []
+
+    if (sanitized.Web3PayEnabled !== initial.Web3PayEnabled) {
+      updates.push({
+        key: 'Web3PayEnabled',
+        value: sanitized.Web3PayEnabled,
+      })
+    }
+
+    if (sanitized.Web3PayGatewayAPIBase !== initial.Web3PayGatewayAPIBase) {
+      updates.push({
+        key: 'Web3PayGatewayAPIBase',
+        value: sanitized.Web3PayGatewayAPIBase,
+      })
+    }
+
+    if (sanitized.Web3PayCheckoutMode !== initial.Web3PayCheckoutMode) {
+      updates.push({
+        key: 'Web3PayCheckoutMode',
+        value: sanitized.Web3PayCheckoutMode,
+      })
+    }
+
+    if (
+      sanitized.Web3PayAppKey &&
+      sanitized.Web3PayAppKey !== initial.Web3PayAppKey
+    ) {
+      updates.push({ key: 'Web3PayAppKey', value: sanitized.Web3PayAppKey })
+    }
+
+    if (
+      sanitized.Web3PayApiSecret &&
+      sanitized.Web3PayApiSecret !== initial.Web3PayApiSecret
+    ) {
+      updates.push({
+        key: 'Web3PayApiSecret',
+        value: sanitized.Web3PayApiSecret,
+      })
+    }
+
+    if (sanitized.Web3PayUnitPrice !== initial.Web3PayUnitPrice) {
+      updates.push({
+        key: 'Web3PayUnitPrice',
+        value: sanitized.Web3PayUnitPrice,
+      })
+    }
+
+    if (sanitized.Web3PayMinTopUp !== initial.Web3PayMinTopUp) {
+      updates.push({ key: 'Web3PayMinTopUp', value: sanitized.Web3PayMinTopUp })
+    }
+
+    for (const update of updates) {
+      await updateOption.mutateAsync(update)
+    }
+  }
+
   const onSubmit = async (values: PaymentFormValues) => {
     const sanitized = {
       PayAddress: removeTrailingSlash(values.PayAddress),
@@ -432,6 +542,16 @@ export function PaymentSettingsSection({
       StripeUnitPrice: values.StripeUnitPrice,
       StripeMinTopUp: values.StripeMinTopUp,
       StripePromotionCodesEnabled: values.StripePromotionCodesEnabled,
+      Web3PayEnabled: values.Web3PayEnabled,
+      Web3PayGatewayAPIBase: removeTrailingSlash(
+        values.Web3PayGatewayAPIBase.trim()
+      ),
+      Web3PayCheckoutMode:
+        values.Web3PayCheckoutMode === 'redirect' ? 'redirect' : 'inline',
+      Web3PayAppKey: values.Web3PayAppKey.trim(),
+      Web3PayApiSecret: values.Web3PayApiSecret.trim(),
+      Web3PayUnitPrice: values.Web3PayUnitPrice,
+      Web3PayMinTopUp: values.Web3PayMinTopUp,
     }
 
     const initial = {
@@ -453,6 +573,18 @@ export function PaymentSettingsSection({
       StripeMinTopUp: initialRef.current.StripeMinTopUp,
       StripePromotionCodesEnabled:
         initialRef.current.StripePromotionCodesEnabled,
+      Web3PayEnabled: initialRef.current.Web3PayEnabled,
+      Web3PayGatewayAPIBase: removeTrailingSlash(
+        initialRef.current.Web3PayGatewayAPIBase.trim()
+      ),
+      Web3PayCheckoutMode:
+        initialRef.current.Web3PayCheckoutMode === 'redirect'
+          ? 'redirect'
+          : 'inline',
+      Web3PayAppKey: initialRef.current.Web3PayAppKey.trim(),
+      Web3PayApiSecret: initialRef.current.Web3PayApiSecret.trim(),
+      Web3PayUnitPrice: initialRef.current.Web3PayUnitPrice,
+      Web3PayMinTopUp: initialRef.current.Web3PayMinTopUp,
     }
 
     const updates: Array<{ key: string; value: string | number | boolean }> = []
@@ -548,6 +680,55 @@ export function PaymentSettingsSection({
         key: 'StripePromotionCodesEnabled',
         value: sanitized.StripePromotionCodesEnabled,
       })
+    }
+
+    if (sanitized.Web3PayEnabled !== initial.Web3PayEnabled) {
+      updates.push({
+        key: 'Web3PayEnabled',
+        value: sanitized.Web3PayEnabled,
+      })
+    }
+
+    if (sanitized.Web3PayGatewayAPIBase !== initial.Web3PayGatewayAPIBase) {
+      updates.push({
+        key: 'Web3PayGatewayAPIBase',
+        value: sanitized.Web3PayGatewayAPIBase,
+      })
+    }
+
+    if (sanitized.Web3PayCheckoutMode !== initial.Web3PayCheckoutMode) {
+      updates.push({
+        key: 'Web3PayCheckoutMode',
+        value: sanitized.Web3PayCheckoutMode,
+      })
+    }
+
+    if (
+      sanitized.Web3PayAppKey &&
+      sanitized.Web3PayAppKey !== initial.Web3PayAppKey
+    ) {
+      updates.push({ key: 'Web3PayAppKey', value: sanitized.Web3PayAppKey })
+    }
+
+    if (
+      sanitized.Web3PayApiSecret &&
+      sanitized.Web3PayApiSecret !== initial.Web3PayApiSecret
+    ) {
+      updates.push({
+        key: 'Web3PayApiSecret',
+        value: sanitized.Web3PayApiSecret,
+      })
+    }
+
+    if (sanitized.Web3PayUnitPrice !== initial.Web3PayUnitPrice) {
+      updates.push({
+        key: 'Web3PayUnitPrice',
+        value: sanitized.Web3PayUnitPrice,
+      })
+    }
+
+    if (sanitized.Web3PayMinTopUp !== initial.Web3PayMinTopUp) {
+      updates.push({ key: 'Web3PayMinTopUp', value: sanitized.Web3PayMinTopUp })
     }
 
     for (const update of updates) {
@@ -1293,6 +1474,216 @@ export function PaymentSettingsSection({
               {updateOption.isPending
                 ? t('Saving...')
                 : t('Save Creem settings')}
+            </Button>
+          </div>
+
+          <Separator />
+
+          <div className='space-y-6'>
+            <div>
+              <h3 className='text-lg font-medium'>{t('Web3 Pay Gateway')}</h3>
+              <p className='text-muted-foreground text-sm'>
+                {t('Configuration for Web3 Pay payment integration')}
+              </p>
+            </div>
+
+            <div className='rounded-md bg-emerald-50 p-4 text-sm text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100'>
+              <p className='mb-2 font-medium'>{t('Webhook Configuration:')}</p>
+              <ul className='list-inside list-disc space-y-1'>
+                <li>
+                  {t('Webhook URL:')}{' '}
+                  <code className='rounded bg-emerald-100 px-1 py-0.5 text-xs dark:bg-emerald-900'>
+                    {'<ServerAddress>/api/web3-pay/webhook'}
+                  </code>
+                </li>
+                <li>{t('Configure this URL in Web3 Pay if required.')}</li>
+              </ul>
+            </div>
+
+            <FormField
+              control={form.control}
+              name='Web3PayEnabled'
+              render={({ field }) => (
+                <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
+                  <div className='space-y-0.5'>
+                    <FormLabel className='text-base'>
+                      {t('Enable Web3 Pay')}
+                    </FormLabel>
+                    <FormDescription>
+                      {t('Allow users to pay with stablecoins on-chain')}
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+
+            <div className='grid gap-6 md:grid-cols-2'>
+              <FormField
+                control={form.control}
+                name='Web3PayGatewayAPIBase'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Web3 Pay order API base URL')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder='https://pay.example.com/api/gateway/v1'
+                        {...field}
+                        onChange={(event) => field.onChange(event.target.value)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Use the Web3 Pay gateway Base URL, not the merchant dashboard URL'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='Web3PayAppKey'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('App Key')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type='password'
+                        placeholder={t('Enter Web3 Pay app key')}
+                        autoComplete='new-password'
+                        {...field}
+                        onChange={(event) => field.onChange(event.target.value)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t('Web3 Pay app key (leave blank unless updating)')}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='Web3PayCheckoutMode'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Payment page mode')}</FormLabel>
+                    <FormControl>
+                      <select
+                        className='border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50'
+                        value={field.value || 'inline'}
+                        onChange={(event) => field.onChange(event.target.value)}
+                      >
+                        <option value='inline'>{t('Show inside site')}</option>
+                        <option value='redirect'>
+                          {t('Redirect to hosted checkout')}
+                        </option>
+                      </select>
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Show coin, chain and address on the recharge page, or open the Web3 Pay hosted checkout page.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='Web3PayApiSecret'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('API Secret')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type='password'
+                        placeholder={t('Enter Web3 Pay API secret')}
+                        autoComplete='new-password'
+                        {...field}
+                        onChange={(event) => field.onChange(event.target.value)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t('Used to sign orders and verify callbacks')}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='Web3PayUnitPrice'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Unit Price')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type='number'
+                        step='0.01'
+                        min={0}
+                        value={(field.value ?? 0) as number}
+                        onChange={(event) =>
+                          field.onChange(event.target.valueAsNumber)
+                        }
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t('How much CNY to charge for each balance unit')}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='Web3PayMinTopUp'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Minimum top-up (CNY)')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type='number'
+                        step='1'
+                        min={0}
+                        value={(field.value ?? 0) as number}
+                        onChange={(event) =>
+                          field.onChange(event.target.valueAsNumber)
+                        }
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t('Minimum amount users can recharge with Web3 Pay')}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <Button
+              type='button'
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                saveWeb3PaySettings()
+              }}
+              disabled={updateOption.isPending}
+            >
+              {updateOption.isPending
+                ? t('Saving...')
+                : t('Save Web3 Pay settings')}
             </Button>
           </div>
 

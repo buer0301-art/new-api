@@ -63,11 +63,11 @@ const RechargeCard = ({
   selectedPreset,
   selectPresetAmount,
   formatLargeNumber,
-  priceRatio,
   topUpCount,
   minTopUp,
   renderQuotaWithAmount,
   getAmount,
+  requestAmountByPayment,
   setTopUpCount,
   setSelectedPreset,
   renderAmount,
@@ -89,6 +89,7 @@ const RechargeCard = ({
   onOpenHistory,
   enableWaffoTopUp,
   enableWaffoPancakeTopUp,
+  enableWeb3PayTopUp,
   subscriptionLoading = false,
   subscriptionPlans = [],
   billingPreference,
@@ -105,6 +106,15 @@ const RechargeCard = ({
   const shouldShowSubscription =
     !subscriptionLoading && subscriptionPlans.length > 0;
   const regularPayMethods = payMethods || [];
+  const defaultPaymentType = regularPayMethods[0]?.type || '';
+  const amountPaymentType = payWay || defaultPaymentType;
+  const refreshAmount = async (value) => {
+    if (requestAmountByPayment && amountPaymentType) {
+      await requestAmountByPayment(amountPaymentType, value);
+      return;
+    }
+    await getAmount(value);
+  };
 
   useEffect(() => {
     if (initialTabSetRef.current) return;
@@ -231,7 +241,8 @@ const RechargeCard = ({
           enableStripeTopUp ||
           enableCreemTopUp ||
           enableWaffoTopUp ||
-          enableWaffoPancakeTopUp ? (
+          enableWaffoPancakeTopUp ||
+          enableWeb3PayTopUp ? (
           <Form
             getFormApi={(api) => (onlineFormApiRef.current = api)}
             initValues={{ topUpCount: topUpCount }}
@@ -240,7 +251,8 @@ const RechargeCard = ({
               {(enableOnlineTopUp ||
                 enableStripeTopUp ||
                 enableWaffoTopUp ||
-                enableWaffoPancakeTopUp) && (
+                enableWaffoPancakeTopUp ||
+                enableWeb3PayTopUp) && (
                 <Row gutter={12}>
                   <Col xs={24} sm={24} md={24} lg={10} xl={10}>
                     <Form.InputNumber
@@ -250,7 +262,8 @@ const RechargeCard = ({
                         !enableOnlineTopUp &&
                         !enableStripeTopUp &&
                         !enableWaffoTopUp &&
-                        !enableWaffoPancakeTopUp
+                        !enableWaffoPancakeTopUp &&
+                        !enableWeb3PayTopUp
                       }
                       placeholder={
                         t('充值数量，最低 ') + renderQuotaWithAmount(minTopUp)
@@ -264,14 +277,14 @@ const RechargeCard = ({
                         if (value && value >= 1) {
                           setTopUpCount(value);
                           setSelectedPreset(null);
-                          await getAmount(value);
+                          await refreshAmount(value);
                         }
                       }}
                       onBlur={(e) => {
                         const value = parseInt(e.target.value);
                         if (!value || value < 1) {
                           setTopUpCount(1);
-                          getAmount(1);
+                          refreshAmount(1);
                         }
                       }}
                       formatter={(value) => (value ? `${value}` : '')}
@@ -316,14 +329,17 @@ const RechargeCard = ({
                               payMethod.type.startsWith('waffo:');
                             const isWaffoPancake =
                               payMethod.type === 'waffo_pancake';
+                            const isWeb3Pay = payMethod.type === 'web3_pay';
                             const disabled =
                               (!enableOnlineTopUp &&
                                 !isStripe &&
                                 !isWaffo &&
-                                !isWaffoPancake) ||
+                                !isWaffoPancake &&
+                                !isWeb3Pay) ||
                               (!enableStripeTopUp && isStripe) ||
                               (!enableWaffoTopUp && isWaffo) ||
                               (!enableWaffoPancakeTopUp && isWaffoPancake) ||
+                              (!enableWeb3PayTopUp && isWeb3Pay) ||
                               minTopupVal > Number(topUpCount || 0);
 
                             const buttonEl = (
@@ -343,6 +359,8 @@ const RechargeCard = ({
                                     <SiWechat size={18} color='#07C160' />
                                   ) : payMethod.type === 'stripe' ? (
                                     <SiStripe size={18} color='#635BFF' />
+                                  ) : payMethod.type === 'web3_pay' ? (
+                                    <Wallet size={18} color='#10B981' />
                                   ) : payMethod.icon ? (
                                     <img
                                       src={payMethod.icon}
@@ -399,7 +417,11 @@ const RechargeCard = ({
                 </Row>
               )}
 
-              {(enableOnlineTopUp || enableStripeTopUp || enableWaffoTopUp) && (
+              {(enableOnlineTopUp ||
+                enableStripeTopUp ||
+                enableWaffoTopUp ||
+                enableWaffoPancakeTopUp ||
+                enableWeb3PayTopUp) && (
                 <Form.Slot
                   label={
                     <div className='flex items-center gap-2'>
@@ -429,11 +451,7 @@ const RechargeCard = ({
                         preset.discount ||
                         topupInfo?.discount?.[preset.value] ||
                         1.0;
-                      const originalPrice = preset.value * priceRatio;
-                      const discountedPrice = originalPrice * discount;
                       const hasDiscount = discount < 1.0;
-                      const actualPay = discountedPrice;
-                      const save = originalPrice - discountedPrice;
 
                       // 根据当前货币类型换算显示金额和数量
                       const { symbol, rate, type } = getCurrencyConfig();
@@ -447,21 +465,15 @@ const RechargeCard = ({
                       } catch (e) {}
 
                       let displayValue = preset.value; // 显示的数量
-                      let displayActualPay = actualPay;
-                      let displaySave = save;
 
                       if (type === 'USD') {
                         // 数量保持USD，价格从CNY转USD
-                        displayActualPay = actualPay / usdRate;
-                        displaySave = save / usdRate;
                       } else if (type === 'CNY') {
                         // 数量转CNY，价格已是CNY
                         displayValue = preset.value * usdRate;
                       } else if (type === 'CUSTOM') {
                         // 数量和价格都转自定义货币
                         displayValue = preset.value * rate;
-                        displayActualPay = (actualPay / usdRate) * rate;
-                        displaySave = (save / usdRate) * rate;
                       }
 
                       return (
@@ -511,11 +523,9 @@ const RechargeCard = ({
                                 margin: '4px 0',
                               }}
                             >
-                              {t('实付')} {symbol}
-                              {displayActualPay.toFixed(2)}，
-                              {hasDiscount
-                                ? `${t('节省')} ${symbol}${displaySave.toFixed(2)}`
-                                : `${t('节省')} ${symbol}0.00`}
+                              {selectedPreset === preset.value
+                                ? `${t('实付')} ${renderAmount()}`
+                                : t('点击后按所选支付方式试算')}
                             </div>
                           </div>
                         </Card>

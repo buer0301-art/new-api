@@ -35,6 +35,8 @@ import Channel from './pages/Channel';
 import Token from './pages/Token';
 import Redemption from './pages/Redemption';
 import TopUp from './pages/TopUp';
+import TopUpPage from './pages/TopUpPage';
+import CustomSidebarMenuPage from './pages/CustomSidebarMenuPage';
 import Log from './pages/Log';
 import Chat from './pages/Chat';
 import Chat2Link from './pages/Chat2Link';
@@ -273,6 +275,26 @@ function App() {
             <PrivateRoute>
               <Suspense fallback={<Loading></Loading>} key={location.pathname}>
                 <TopUp />
+              </Suspense>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/topup'
+          element={
+            <PrivateRoute>
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <TopUpPage />
+              </Suspense>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/custom-menu/:index'
+          element={
+            <PrivateRoute>
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <CustomSidebarMenuPage />
               </Suspense>
             </PrivateRoute>
           }
