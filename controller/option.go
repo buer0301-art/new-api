@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/console_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/per_request_pricing"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 
@@ -248,6 +249,15 @@ func UpdateOption(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
 				"message": "缓存创建倍率设置失败: " + err.Error(),
+			})
+			return
+		}
+	case per_request_pricing.OptionKeyRules:
+		err = per_request_pricing.UpdateRulesByJSONString(option.Value.(string))
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "按分辨率按次计费设置失败: " + err.Error(),
 			})
 			return
 		}
