@@ -2,6 +2,7 @@ package per_request_pricing
 
 import (
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -234,5 +235,57 @@ func TestRulesAccessorsReturnDeepCopies(t *testing.T) {
 	rules["new-model"] = PerRequestPriceRule{}
 	if _, ok := GetRule("new-model"); ok {
 		t.Fatal("GetRulesCopy exposed mutable rules map")
+	}
+}
+
+func TestRulesConcurrentReadWrite(t *testing.T) {
+	original := RulesToJSONString()
+	defer func() {
+		if err := UpdateRulesByJSONString(original); err != nil {
+			t.Fatalf("restore rules: %v", err)
+		}
+	}()
+
+	const iterations = 100
+	var wg sync.WaitGroup
+
+	for writer := 0; writer < 4; writer++ {
+		writer := writer
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				jsonStr := `{"concurrent-model":{"media_type":"image","unit":"image","prices":{"2K":0.02},"default_resolution":"2K","fallback_enabled":false},"writer-model":{"media_type":"video","unit":"second","prices":{"4K":0.24},"default_resolution":"4K","fallback_enabled":true}}`
+				if writer%2 == 1 {
+					jsonStr = `{"concurrent-model":{"media_type":"image","unit":"image","prices":{"1K":0.01,"2K":0.02},"default_resolution":"1K","fallback_enabled":true}}`
+				}
+				if err := UpdateRulesByJSONString(jsonStr); err != nil {
+					t.Errorf("UpdateRulesByJSONString error: %v", err)
+					return
+				}
+			}
+		}()
+	}
+
+	for reader := 0; reader < 8; reader++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				_, _ = GetRule("concurrent-model")
+				_ = GetRulesCopy()
+				_ = RulesToJSONString()
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	rule, ok := GetRule("concurrent-model")
+	if !ok {
+		t.Fatal("expected concurrent-model rule after concurrent access")
+	}
+	if rule.DefaultResolution == "" || len(rule.Prices) == 0 {
+		t.Fatalf("final rule is not readable: %+v", rule)
 	}
 }
