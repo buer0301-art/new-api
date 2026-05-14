@@ -5,12 +5,14 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/per_request_pricing"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 
@@ -68,6 +70,34 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 	modelPrice, usePrice := ratio_setting.GetModelPrice(info.OriginModelName, false)
 
 	groupRatioInfo := HandleGroupRatio(c, info)
+
+	if rule, ok := per_request_pricing.GetRule(info.OriginModelName); ok {
+		imageReq, isImageRequest := info.Request.(*dto.ImageRequest)
+		if !isImageRequest {
+			if rule.MediaType == per_request_pricing.MediaTypeImage {
+				return types.PriceData{}, fmt.Errorf("model %s has image per-request pricing configured but request type is %T, expected *dto.ImageRequest", info.OriginModelName, info.Request)
+			}
+		} else {
+			resolved, err := per_request_pricing.ResolveImagePricing(info.OriginModelName, rule, per_request_pricing.ImagePricingInput{
+				Size:         imageReq.Size,
+				N:            imageReq.N,
+				GroupRatio:   groupRatioInfo.GroupRatio,
+				QuotaPerUnit: common.QuotaPerUnit,
+			})
+			if err != nil {
+				return types.PriceData{}, err
+			}
+			priceData := types.PriceData{
+				ModelPrice:                resolved.PriceUSD,
+				UsePrice:                  true,
+				GroupRatioInfo:            groupRatioInfo,
+				QuotaToPreConsume:         resolved.Quota,
+				ResolvedPerRequestPricing: resolved,
+			}
+			info.PriceData = priceData
+			return priceData, nil
+		}
+	}
 
 	// Check if this model uses tiered_expr billing
 	if billing_setting.GetBillingMode(info.OriginModelName) == billing_setting.BillingModeTieredExpr {
