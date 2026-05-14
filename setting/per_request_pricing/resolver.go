@@ -96,9 +96,9 @@ func ResolveVideoPricing(model string, rule PerRequestPriceRule, input VideoPric
 	if rule.MediaType != MediaTypeVideo {
 		return nil, fmt.Errorf("model %s: media type mismatch, expected %s", model, MediaTypeVideo)
 	}
-	rawResolution := strings.TrimSpace(input.Size)
+	rawResolution := strings.TrimSpace(input.MetadataResolution)
 	if rawResolution == "" {
-		rawResolution = strings.TrimSpace(input.MetadataResolution)
+		rawResolution = strings.TrimSpace(input.Size)
 	}
 	resolution, unitPrice, err := resolveRulePrice(model, rule, MediaTypeVideo, rawResolution)
 	if err != nil {

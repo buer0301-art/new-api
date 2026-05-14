@@ -147,6 +147,50 @@ func TestResolveVideoPricingEmptyResolutionUsesDefault(t *testing.T) {
 	}
 }
 
+func TestResolveVideoPricingMetadataResolutionTakesPriority(t *testing.T) {
+	rule := PerRequestPriceRule{
+		MediaType:         MediaTypeVideo,
+		Unit:              UnitSecond,
+		Prices:            map[string]float64{"1K": 0.12, "4K": 0.24},
+		DefaultResolution: "1K",
+		FallbackEnabled:   false,
+	}
+	resolved, err := ResolveVideoPricing("test-model", rule, VideoPricingInput{
+		Size:               "1080p",
+		MetadataResolution: "4k",
+		Seconds:            "10",
+		GroupRatio:         1,
+		QuotaPerUnit:       500000,
+	})
+	if err != nil {
+		t.Fatalf("ResolveVideoPricing error: %v", err)
+	}
+	if resolved.Resolution != "4K" || resolved.UnitPrice != 0.24 || resolved.PriceUSD != 2.4 || resolved.Quota != 1200000 {
+		t.Fatalf("unexpected resolved pricing: %+v", resolved)
+	}
+}
+
+func TestResolveVideoPricingMissingDurationRejected(t *testing.T) {
+	rule := PerRequestPriceRule{
+		MediaType:         MediaTypeVideo,
+		Unit:              UnitSecond,
+		Prices:            map[string]float64{"4K": 0.24},
+		DefaultResolution: "4K",
+		FallbackEnabled:   false,
+	}
+	_, err := ResolveVideoPricing("test-model", rule, VideoPricingInput{
+		Size:         "4k",
+		GroupRatio:   1,
+		QuotaPerUnit: 500000,
+	})
+	if err == nil {
+		t.Fatal("expected missing duration error")
+	}
+	if !strings.Contains(err.Error(), `invalid video seconds ""/duration 0`) {
+		t.Fatalf("error missing duration context: %v", err)
+	}
+}
+
 func TestResolveVideoPricingInvalidSecondsIncludesContext(t *testing.T) {
 	rule := PerRequestPriceRule{
 		MediaType:         MediaTypeVideo,
