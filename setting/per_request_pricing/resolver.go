@@ -70,10 +70,21 @@ func ResolveImagePricing(model string, rule PerRequestPriceRule, input ImagePric
 	if rule.MediaType != MediaTypeImage {
 		return nil, fmt.Errorf("model %s: media type mismatch, expected %s", model, MediaTypeImage)
 	}
-	resolution, ok := NormalizeResolution(MediaTypeImage, input.Size)
-	if !ok {
+	rawResolution := strings.TrimSpace(input.Size)
+	resolution := rule.DefaultResolution
+	if rawResolution != "" {
+		normalized, ok := NormalizeResolution(MediaTypeImage, rawResolution)
+		if !ok {
+			if !rule.FallbackEnabled {
+				return nil, fmt.Errorf("model %s: unknown image resolution %q", model, rawResolution)
+			}
+		} else {
+			resolution = normalized
+		}
+	}
+	if resolution == "" {
 		if !rule.FallbackEnabled {
-			return nil, fmt.Errorf("model %s: unknown image resolution %q", model, input.Size)
+			return nil, fmt.Errorf("model %s: default resolution not configured", model)
 		}
 		resolution = rule.DefaultResolution
 	}
@@ -114,10 +125,20 @@ func ResolveVideoPricing(model string, rule PerRequestPriceRule, input VideoPric
 	if rawResolution == "" {
 		rawResolution = strings.TrimSpace(input.MetadataResolution)
 	}
-	resolution, ok := NormalizeResolution(MediaTypeVideo, rawResolution)
-	if !ok {
+	resolution := rule.DefaultResolution
+	if rawResolution != "" {
+		normalized, ok := NormalizeResolution(MediaTypeVideo, rawResolution)
+		if !ok {
+			if !rule.FallbackEnabled {
+				return nil, fmt.Errorf("model %s: unknown video resolution %q", model, rawResolution)
+			}
+		} else {
+			resolution = normalized
+		}
+	}
+	if resolution == "" {
 		if !rule.FallbackEnabled {
-			return nil, fmt.Errorf("model %s: unknown video resolution %q", model, rawResolution)
+			return nil, fmt.Errorf("model %s: default resolution not configured", model)
 		}
 		resolution = rule.DefaultResolution
 	}

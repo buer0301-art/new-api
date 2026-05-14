@@ -77,6 +77,27 @@ func TestResolveImagePricingCountOnce(t *testing.T) {
 	}
 }
 
+func TestResolveImagePricingEmptySizeUsesDefault(t *testing.T) {
+	rule := PerRequestPriceRule{
+		MediaType:         MediaTypeImage,
+		Unit:              UnitImage,
+		Prices:            map[string]float64{"2K": 0.02},
+		DefaultResolution: "2K",
+		FallbackEnabled:   false,
+	}
+	resolved, err := ResolveImagePricing("test-model", rule, ImagePricingInput{
+		Size:         "",
+		GroupRatio:   1,
+		QuotaPerUnit: 500000,
+	})
+	if err != nil {
+		t.Fatalf("ResolveImagePricing error: %v", err)
+	}
+	if resolved.Resolution != "2K" || resolved.Quantity != 1 || resolved.PriceUSD != 0.02 || resolved.Quota != 10000 {
+		t.Fatalf("unexpected resolved pricing: %+v", resolved)
+	}
+}
+
 func TestResolveVideoPricingSeconds(t *testing.T) {
 	rule := PerRequestPriceRule{
 		MediaType:         MediaTypeVideo,
@@ -96,6 +117,29 @@ func TestResolveVideoPricingSeconds(t *testing.T) {
 	}
 	if resolved.Quota != 1200000 {
 		t.Fatalf("unexpected quota: %+v", resolved)
+	}
+}
+
+func TestResolveVideoPricingEmptyResolutionUsesDefault(t *testing.T) {
+	rule := PerRequestPriceRule{
+		MediaType:         MediaTypeVideo,
+		Unit:              UnitSecond,
+		Prices:            map[string]float64{"4K": 0.24},
+		DefaultResolution: "4K",
+		FallbackEnabled:   false,
+	}
+	resolved, err := ResolveVideoPricing("test-model", rule, VideoPricingInput{
+		Size:               "",
+		MetadataResolution: "",
+		Seconds:            "10",
+		GroupRatio:         1,
+		QuotaPerUnit:       500000,
+	})
+	if err != nil {
+		t.Fatalf("ResolveVideoPricing error: %v", err)
+	}
+	if resolved.Resolution != "4K" || resolved.Quantity != 10 || resolved.PriceUSD != 2.4 || resolved.Quota != 1200000 {
+		t.Fatalf("unexpected resolved pricing: %+v", resolved)
 	}
 }
 
