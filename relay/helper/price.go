@@ -73,11 +73,7 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 
 	if rule, ok := per_request_pricing.GetRule(info.OriginModelName); ok {
 		imageReq, isImageRequest := info.Request.(*dto.ImageRequest)
-		if !isImageRequest {
-			if rule.MediaType == per_request_pricing.MediaTypeImage {
-				return types.PriceData{}, fmt.Errorf("model %s has image per-request pricing configured but request type is %T, expected *dto.ImageRequest", info.OriginModelName, info.Request)
-			}
-		} else {
+		if rule.MediaType == per_request_pricing.MediaTypeImage && isImageRequest {
 			resolved, err := per_request_pricing.ResolveImagePricing(info.OriginModelName, rule, per_request_pricing.ImagePricingInput{
 				Size:         imageReq.Size,
 				N:            imageReq.N,

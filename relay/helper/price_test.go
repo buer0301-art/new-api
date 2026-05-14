@@ -118,6 +118,27 @@ func TestModelPriceHelperImageResolutionPricingUnknownSizeWithoutFallback(t *tes
 	require.Contains(t, err.Error(), "unknown image resolution")
 }
 
+func TestModelPriceHelperImageResolutionPricingSkipsNonImageRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	setupImageResolutionPricingRules(t)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set("group", "default")
+
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "gpt-image-2",
+		UserGroup:       "default",
+		UsingGroup:      "default",
+		Request:         nil,
+	}
+
+	_, err := ModelPriceHelper(ctx, info, 0, &types.TokenCountMeta{})
+	require.Error(t, err)
+	require.NotContains(t, err.Error(), "expected *dto.ImageRequest")
+	require.NotContains(t, err.Error(), "per-request pricing")
+}
+
 func setupImageResolutionPricingRules(t *testing.T) {
 	t.Helper()
 
