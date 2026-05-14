@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/config"
@@ -34,12 +35,10 @@ var currentSetting = Setting{
 	Rules: map[string]PerRequestPriceRule{},
 }
 
+var currentSettingMutex sync.RWMutex
+
 func init() {
 	config.GlobalConfig.Register("per_request_pricing", &currentSetting)
-}
-
-func GetSetting() *Setting {
-	return &currentSetting
 }
 
 func GetRule(model string) (PerRequestPriceRule, bool) {
@@ -47,23 +46,29 @@ func GetRule(model string) (PerRequestPriceRule, bool) {
 	if model == "" {
 		return PerRequestPriceRule{}, false
 	}
+	currentSettingMutex.RLock()
+	defer currentSettingMutex.RUnlock()
+
 	rule, ok := currentSetting.Rules[model]
-	return rule, ok
+	if !ok {
+		return PerRequestPriceRule{}, false
+	}
+	return copyRule(rule), true
 }
 
 func GetRulesCopy() map[string]PerRequestPriceRule {
-	if len(currentSetting.Rules) == 0 {
-		return map[string]PerRequestPriceRule{}
-	}
-	copied := make(map[string]PerRequestPriceRule, len(currentSetting.Rules))
-	for model, rule := range currentSetting.Rules {
-		copied[model] = copyRule(rule)
-	}
-	return copied
+	currentSettingMutex.RLock()
+	defer currentSettingMutex.RUnlock()
+
+	return copyRules(currentSetting.Rules)
 }
 
 func RulesToJSONString() string {
-	jsonBytes, err := common.Marshal(currentSetting.Rules)
+	currentSettingMutex.RLock()
+	rules := copyRules(currentSetting.Rules)
+	currentSettingMutex.RUnlock()
+
+	jsonBytes, err := common.Marshal(rules)
 	if err != nil {
 		common.SysError("error marshalling per-request pricing rules: " + err.Error())
 		return "{}"
@@ -79,8 +84,23 @@ func UpdateRulesByJSONString(jsonStr string) error {
 	if err := ValidateRules(rules); err != nil {
 		return err
 	}
+	rules = copyRules(rules)
+
+	currentSettingMutex.Lock()
+	defer currentSettingMutex.Unlock()
 	currentSetting.Rules = rules
 	return nil
+}
+
+func copyRules(rules map[string]PerRequestPriceRule) map[string]PerRequestPriceRule {
+	if len(rules) == 0 {
+		return map[string]PerRequestPriceRule{}
+	}
+	copied := make(map[string]PerRequestPriceRule, len(rules))
+	for model, rule := range rules {
+		copied[model] = copyRule(rule)
+	}
+	return copied
 }
 
 func ValidateRules(rules map[string]PerRequestPriceRule) error {

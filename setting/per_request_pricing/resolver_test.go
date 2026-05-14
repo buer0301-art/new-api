@@ -1,6 +1,9 @@
 package per_request_pricing
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestNormalizeResolutionImageAliases(t *testing.T) {
 	tests := []struct {
@@ -143,6 +146,30 @@ func TestResolveVideoPricingEmptyResolutionUsesDefault(t *testing.T) {
 	}
 }
 
+func TestResolveVideoPricingInvalidSecondsIncludesContext(t *testing.T) {
+	rule := PerRequestPriceRule{
+		MediaType:         MediaTypeVideo,
+		Unit:              UnitSecond,
+		Prices:            map[string]float64{"4K": 0.24},
+		DefaultResolution: "4K",
+		FallbackEnabled:   false,
+	}
+	_, err := ResolveVideoPricing("test-model", rule, VideoPricingInput{
+		Size:         "4k",
+		Seconds:      "0",
+		Duration:     5,
+		GroupRatio:   1,
+		QuotaPerUnit: 500000,
+	})
+	if err == nil {
+		t.Fatal("expected invalid seconds error")
+	}
+	message := err.Error()
+	if !strings.Contains(message, "model test-model") || !strings.Contains(message, `invalid video seconds "0"/duration 5`) {
+		t.Fatalf("error missing context: %v", err)
+	}
+}
+
 func TestResolveUnknownResolutionRejected(t *testing.T) {
 	rule := PerRequestPriceRule{
 		MediaType:         MediaTypeImage,
@@ -172,5 +199,40 @@ func TestValidateRulesRejectsDefaultMissing(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected validation error")
+	}
+}
+
+func TestRulesAccessorsReturnDeepCopies(t *testing.T) {
+	original := RulesToJSONString()
+	defer func() {
+		if err := UpdateRulesByJSONString(original); err != nil {
+			t.Fatalf("restore rules: %v", err)
+		}
+	}()
+
+	if err := UpdateRulesByJSONString(`{"test-model":{"media_type":"image","unit":"image","prices":{"2K":0.02},"default_resolution":"2K","fallback_enabled":false}}`); err != nil {
+		t.Fatalf("UpdateRulesByJSONString error: %v", err)
+	}
+
+	rule, ok := GetRule("test-model")
+	if !ok {
+		t.Fatal("expected test-model rule")
+	}
+	rule.Prices["2K"] = 99
+	ruleAgain, _ := GetRule("test-model")
+	if ruleAgain.Prices["2K"] != 0.02 {
+		t.Fatalf("GetRule exposed mutable prices map: %+v", ruleAgain)
+	}
+
+	rules := GetRulesCopy()
+	rules["test-model"].Prices["2K"] = 88
+	ruleAgain, _ = GetRule("test-model")
+	if ruleAgain.Prices["2K"] != 0.02 {
+		t.Fatalf("GetRulesCopy exposed mutable prices map: %+v", ruleAgain)
+	}
+
+	rules["new-model"] = PerRequestPriceRule{}
+	if _, ok := GetRule("new-model"); ok {
+		t.Fatal("GetRulesCopy exposed mutable rules map")
 	}
 }

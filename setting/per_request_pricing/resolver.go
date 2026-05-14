@@ -70,34 +70,9 @@ func ResolveImagePricing(model string, rule PerRequestPriceRule, input ImagePric
 	if rule.MediaType != MediaTypeImage {
 		return nil, fmt.Errorf("model %s: media type mismatch, expected %s", model, MediaTypeImage)
 	}
-	rawResolution := strings.TrimSpace(input.Size)
-	resolution := rule.DefaultResolution
-	if rawResolution != "" {
-		normalized, ok := NormalizeResolution(MediaTypeImage, rawResolution)
-		if !ok {
-			if !rule.FallbackEnabled {
-				return nil, fmt.Errorf("model %s: unknown image resolution %q", model, rawResolution)
-			}
-		} else {
-			resolution = normalized
-		}
-	}
-	if resolution == "" {
-		if !rule.FallbackEnabled {
-			return nil, fmt.Errorf("model %s: default resolution not configured", model)
-		}
-		resolution = rule.DefaultResolution
-	}
-	unitPrice, ok := rule.Prices[resolution]
-	if !ok {
-		if !rule.FallbackEnabled {
-			return nil, fmt.Errorf("model %s: resolution %q not configured", model, resolution)
-		}
-		resolution = rule.DefaultResolution
-		unitPrice, ok = rule.Prices[resolution]
-		if !ok {
-			return nil, fmt.Errorf("model %s: default resolution %q not configured", model, resolution)
-		}
+	resolution, unitPrice, err := resolveRulePrice(model, rule, MediaTypeImage, input.Size)
+	if err != nil {
+		return nil, err
 	}
 	quantity := float64(1)
 	if input.N != nil && *input.N > 0 {
@@ -125,37 +100,13 @@ func ResolveVideoPricing(model string, rule PerRequestPriceRule, input VideoPric
 	if rawResolution == "" {
 		rawResolution = strings.TrimSpace(input.MetadataResolution)
 	}
-	resolution := rule.DefaultResolution
-	if rawResolution != "" {
-		normalized, ok := NormalizeResolution(MediaTypeVideo, rawResolution)
-		if !ok {
-			if !rule.FallbackEnabled {
-				return nil, fmt.Errorf("model %s: unknown video resolution %q", model, rawResolution)
-			}
-		} else {
-			resolution = normalized
-		}
-	}
-	if resolution == "" {
-		if !rule.FallbackEnabled {
-			return nil, fmt.Errorf("model %s: default resolution not configured", model)
-		}
-		resolution = rule.DefaultResolution
-	}
-	unitPrice, ok := rule.Prices[resolution]
-	if !ok {
-		if !rule.FallbackEnabled {
-			return nil, fmt.Errorf("model %s: resolution %q not configured", model, resolution)
-		}
-		resolution = rule.DefaultResolution
-		unitPrice, ok = rule.Prices[resolution]
-		if !ok {
-			return nil, fmt.Errorf("model %s: default resolution %q not configured", model, resolution)
-		}
+	resolution, unitPrice, err := resolveRulePrice(model, rule, MediaTypeVideo, rawResolution)
+	if err != nil {
+		return nil, err
 	}
 	seconds, err := parseSeconds(input.Seconds, input.Duration)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("model %s: invalid video seconds %q/duration %d: %w", model, input.Seconds, input.Duration, err)
 	}
 	quantity := float64(seconds)
 	priceUSD := unitPrice * quantity
@@ -170,6 +121,37 @@ func ResolveVideoPricing(model string, rule PerRequestPriceRule, input VideoPric
 		PriceUSD:   priceUSD,
 		Quota:      quota,
 	}, nil
+}
+
+func resolveRulePrice(model string, rule PerRequestPriceRule, mediaType, raw string) (string, float64, error) {
+	raw = strings.TrimSpace(raw)
+	resolution := rule.DefaultResolution
+	if raw != "" {
+		normalized, ok := NormalizeResolution(mediaType, raw)
+		if !ok {
+			if !rule.FallbackEnabled {
+				return "", 0, fmt.Errorf("model %s: unknown %s resolution %q", model, mediaType, raw)
+			}
+		} else {
+			resolution = normalized
+		}
+	}
+	if resolution == "" {
+		return "", 0, fmt.Errorf("model %s: default resolution not configured", model)
+	}
+	unitPrice, ok := rule.Prices[resolution]
+	if ok {
+		return resolution, unitPrice, nil
+	}
+	if !rule.FallbackEnabled {
+		return "", 0, fmt.Errorf("model %s: resolution %q not configured", model, resolution)
+	}
+	resolution = rule.DefaultResolution
+	unitPrice, ok = rule.Prices[resolution]
+	if !ok {
+		return "", 0, fmt.Errorf("model %s: default resolution %q not configured", model, resolution)
+	}
+	return resolution, unitPrice, nil
 }
 
 func parseSeconds(seconds string, duration int) (int, error) {
