@@ -183,6 +183,12 @@ export interface TopupInfo {
   web3_pay_min_topup?: number
   /** Web3 Pay checkout behavior */
   web3_pay_checkout_mode?: 'inline' | 'redirect'
+  /** Whether redemption code usage is enabled */
+  enable_redemption?: boolean
+  /** Whether compliance confirmation has been completed */
+  payment_compliance_confirmed?: boolean
+  /** Current compliance terms version */
+  payment_compliance_terms_version?: string
 }
 
 /**
