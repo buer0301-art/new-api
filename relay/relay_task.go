@@ -19,6 +19,7 @@ import (
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/per_request_pricing"
 	"github.com/gin-gonic/gin"
 )
 
@@ -184,17 +185,49 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	}
 	info.PriceData = priceData
 
+	if rule, ok := per_request_pricing.GetRule(info.OriginModelName); ok && rule.MediaType == per_request_pricing.MediaTypeVideo {
+		req, err := relaycommon.GetTaskRequest(c)
+		if err != nil {
+			return nil, service.TaskErrorWrapperLocal(err, "model_price_error", http.StatusBadRequest)
+		}
+		var metadataResolution string
+		if req.Metadata != nil {
+			if resolution, ok := req.Metadata["resolution"]; ok {
+				metadataResolution = fmt.Sprint(resolution)
+			}
+		}
+		resolved, err := per_request_pricing.ResolveVideoPricing(info.OriginModelName, rule, per_request_pricing.VideoPricingInput{
+			Size:               req.Size,
+			MetadataResolution: metadataResolution,
+			Seconds:            req.Seconds,
+			Duration:           req.Duration,
+			GroupRatio:         priceData.GroupRatioInfo.GroupRatio,
+			QuotaPerUnit:       common.QuotaPerUnit,
+		})
+		if err != nil {
+			return nil, service.TaskErrorWrapperLocal(err, "model_price_error", http.StatusBadRequest)
+		}
+		priceData.ModelPrice = resolved.PriceUSD
+		priceData.UsePrice = true
+		priceData.Quota = resolved.Quota
+		priceData.ResolvedPerRequestPricing = resolved
+		priceData.OtherRatios = nil
+		info.PriceData = priceData
+	}
+
 	// 5. 计费估算：让适配器根据用户请求提供 OtherRatios（时长、分辨率等）
 	//    必须在 ModelPriceHelperPerCall 之后调用（它会重建 PriceData）。
 	//    ResolveOriginTask 可能已在 remix 路径中预设了 OtherRatios，此处合并。
-	if estimatedRatios := adaptor.EstimateBilling(c, info); len(estimatedRatios) > 0 {
-		for k, v := range estimatedRatios {
-			info.PriceData.AddOtherRatio(k, v)
+	if info.PriceData.ResolvedPerRequestPricing == nil {
+		if estimatedRatios := adaptor.EstimateBilling(c, info); len(estimatedRatios) > 0 {
+			for k, v := range estimatedRatios {
+				info.PriceData.AddOtherRatio(k, v)
+			}
 		}
 	}
 
 	// 6. 将 OtherRatios 应用到基础额度
-	if !common.StringsContains(constant.TaskPricePatches, modelName) {
+	if info.PriceData.ResolvedPerRequestPricing == nil && !common.StringsContains(constant.TaskPricePatches, modelName) {
 		for _, ra := range info.PriceData.OtherRatios {
 			if ra != 1.0 {
 				info.PriceData.Quota = int(float64(info.PriceData.Quota) * ra)

@@ -11,6 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
+	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -50,6 +51,7 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 		other["is_model_mapped"] = true
 		other["upstream_model_name"] = info.UpstreamModelName
 	}
+	addResolvedPerRequestPricingOther(other, info.PriceData.ResolvedPerRequestPricing)
 	model.RecordConsumeLog(c, info.UserId, model.RecordConsumeLogParams{
 		ChannelId: info.ChannelId,
 		ModelName: info.OriginModelName,
@@ -62,6 +64,20 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 	})
 	model.UpdateUserUsedQuotaAndRequestCount(info.UserId, info.PriceData.Quota)
 	model.UpdateChannelUsedQuota(info.ChannelId, info.PriceData.Quota)
+}
+
+func addResolvedPerRequestPricingOther(other map[string]interface{}, resolved *types.ResolvedPerRequestPricing) {
+	if resolved == nil {
+		return
+	}
+	other["billing_mode"] = "per_request_resolution"
+	other["media_type"] = resolved.MediaType
+	other["unit"] = resolved.Unit
+	other["resolution"] = resolved.Resolution
+	other["unit_price"] = resolved.UnitPrice
+	other["quantity"] = resolved.Quantity
+	other["price_usd"] = resolved.PriceUSD
+	other["resolved_quota"] = resolved.Quota
 }
 
 // ---------------------------------------------------------------------------
@@ -130,6 +146,7 @@ func taskBillingOther(task *model.Task) map[string]interface{} {
 				other[k] = v
 			}
 		}
+		addResolvedPerRequestPricingOther(other, bc.ResolvedPerRequestPricing)
 	}
 	props := task.Properties
 	if props.UpstreamModelName != "" && props.UpstreamModelName != props.OriginModelName {
