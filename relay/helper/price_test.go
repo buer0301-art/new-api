@@ -78,7 +78,7 @@ func TestModelPriceHelperImageResolutionPricing(t *testing.T) {
 		UsingGroup:      "default",
 		Request: &dto.ImageRequest{
 			Model: "gpt-image-2",
-			Size:  "2048x2048",
+			Size:  "2K",
 			N:     &n,
 		},
 	}

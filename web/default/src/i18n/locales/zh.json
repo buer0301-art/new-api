@@ -4459,6 +4459,8 @@
     "Image resolution": "图片分辨率",
     "Resolution pricing": "分辨率定价",
     "Unknown resolution: Reject request": "未知分辨率：拒绝请求",
-    "Video resolution": "视频分辨率"
+    "Video resolution": "视频分辨率",
+    "Add resolution": "添加分辨率",
+    "Resolution": "分辨率"
   }
 }

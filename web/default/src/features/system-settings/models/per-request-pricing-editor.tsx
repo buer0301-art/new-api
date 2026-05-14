@@ -17,7 +17,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useState } from 'react'
+import { Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -32,10 +34,13 @@ import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   buildRuleFromRows,
-  IMAGE_RESOLUTION_ROWS,
-  VIDEO_RESOLUTION_ROWS,
+  createDefaultPriceRows,
+  createEmptyPriceRow,
+  createPriceRowsFromRule,
+  getConfiguredDefaultResolution,
   type PerRequestMediaType,
   type PerRequestPriceRule,
+  type PerRequestPriceRow,
   type PerRequestSubtype,
 } from './per-request-pricing'
 
@@ -59,31 +64,6 @@ const MEDIA_BY_SUBTYPE: Record<
 
 const numericDraftRegex = /^(\d+(\.\d*)?|\.\d*)?$/
 
-function createEnabledState(
-  rows: readonly string[],
-  prices?: Record<string, number>,
-  defaultEnabled = true
-) {
-  return Object.fromEntries(
-    rows.map((resolution) => [
-      resolution,
-      prices ? prices[resolution] !== undefined : defaultEnabled,
-    ])
-  ) as Record<string, boolean>
-}
-
-function createPriceState(
-  rows: readonly string[],
-  prices?: Record<string, number>
-) {
-  return Object.fromEntries(
-    rows.map((resolution) => [
-      resolution,
-      prices?.[resolution] !== undefined ? String(prices[resolution]) : '',
-    ])
-  ) as Record<string, string>
-}
-
 export function PerRequestPricingEditor({
   name,
   price,
@@ -94,51 +74,33 @@ export function PerRequestPricingEditor({
   onSubtypeChange,
 }: PerRequestPricingEditorProps) {
   const { t } = useTranslation()
-  const [imageEnabled, setImageEnabled] = useState<Record<string, boolean>>(
-    () => createEnabledState(IMAGE_RESOLUTION_ROWS)
-  )
-  const [imagePrices, setImagePrices] = useState<Record<string, string>>(() =>
-    createPriceState(IMAGE_RESOLUTION_ROWS)
+  const [imageRows, setImageRows] = useState<PerRequestPriceRow[]>(() =>
+    createDefaultPriceRows('image')
   )
   const [imageDefault, setImageDefault] = useState('1K')
-  const [videoEnabled, setVideoEnabled] = useState<Record<string, boolean>>(
-    () => createEnabledState(VIDEO_RESOLUTION_ROWS)
+  const [videoRows, setVideoRows] = useState<PerRequestPriceRow[]>(() =>
+    createDefaultPriceRows('video')
   )
-  const [videoPrices, setVideoPrices] = useState<Record<string, string>>(() =>
-    createPriceState(VIDEO_RESOLUTION_ROWS)
-  )
-  const [videoDefault, setVideoDefault] = useState('480')
+  const [videoDefault, setVideoDefault] = useState('480p')
 
   useEffect(() => {
     if (!rule?.media_type) return
 
     if (rule.media_type === 'image') {
-      setImageEnabled(
-        createEnabledState(IMAGE_RESOLUTION_ROWS, rule.prices, false)
-      )
-      setImagePrices(createPriceState(IMAGE_RESOLUTION_ROWS, rule.prices))
-      setImageDefault(rule.default_resolution || '1K')
+      setImageRows(createPriceRowsFromRule('image', rule))
+      setImageDefault(getConfiguredDefaultResolution('image', rule))
     } else {
-      setVideoEnabled(
-        createEnabledState(VIDEO_RESOLUTION_ROWS, rule.prices, false)
-      )
-      setVideoPrices(createPriceState(VIDEO_RESOLUTION_ROWS, rule.prices))
-      setVideoDefault(rule.default_resolution || '480')
+      setVideoRows(createPriceRowsFromRule('video', rule))
+      setVideoDefault(getConfiguredDefaultResolution('video', rule))
     }
   }, [rule])
 
   const syncRule = (
     mediaType: PerRequestMediaType,
-    nextPrices: Record<string, string>,
-    nextEnabled: Record<string, boolean>,
+    nextRows: PerRequestPriceRow[],
     nextDefault: string
   ) => {
-    const nextRule = buildRuleFromRows(
-      mediaType,
-      nextPrices,
-      nextEnabled,
-      nextDefault
-    )
+    const nextRule = buildRuleFromRows(mediaType, nextRows, nextDefault)
     onRuleChange(nextRule)
   }
 
@@ -152,65 +114,120 @@ export function PerRequestPricingEditor({
     const mediaType = MEDIA_BY_SUBTYPE[nextSubtype]
     syncRule(
       mediaType,
-      mediaType === 'image' ? imagePrices : videoPrices,
-      mediaType === 'image' ? imageEnabled : videoEnabled,
+      mediaType === 'image' ? imageRows : videoRows,
       mediaType === 'image' ? imageDefault : videoDefault
     )
   }
 
   const renderRows = (
     mediaType: PerRequestMediaType,
-    rows: readonly string[],
-    enabled: Record<string, boolean>,
-    prices: Record<string, string>,
+    rows: PerRequestPriceRow[],
     defaultResolution: string,
-    setEnabled: (next: Record<string, boolean>) => void,
-    setPrices: (next: Record<string, string>) => void,
+    setRows: (next: PerRequestPriceRow[]) => void,
     setDefault: (next: string) => void
   ) => {
-    const selectableRows = rows.filter((resolution) => enabled[resolution])
+    const selectableRows = rows
+      .filter((row) => row.enabled && row.resolution.trim())
+      .map((row) => row.resolution.trim())
+
+    const updateRows = (
+      nextRows: PerRequestPriceRow[],
+      nextDefault = defaultResolution
+    ) => {
+      setRows(nextRows)
+      syncRule(mediaType, nextRows, nextDefault)
+    }
 
     return (
       <div className='space-y-4'>
         <div className='rounded-lg border'>
-          {rows.map((resolution) => (
+          {rows.map((row) => (
             <div
-              key={resolution}
-              className='grid grid-cols-[auto_72px_1fr] items-center gap-3 border-b px-3 py-2 last:border-b-0'
+              key={row.id}
+              className='grid grid-cols-[auto_minmax(96px,0.7fr)_minmax(120px,1fr)_auto] items-center gap-3 border-b px-3 py-2 last:border-b-0'
             >
               <Switch
-                checked={enabled[resolution]}
+                checked={row.enabled}
                 onCheckedChange={(checked) => {
-                  const nextEnabled = { ...enabled, [resolution]: checked }
-                  const nextDefault =
-                    checked || defaultResolution !== resolution
-                      ? defaultResolution
-                      : rows.find(
-                          (item) => item !== resolution && nextEnabled[item]
-                        ) || resolution
-                  setEnabled(nextEnabled)
+                  const nextRows = rows.map((item) =>
+                    item.id === row.id ? { ...item, enabled: checked } : item
+                  )
+                  const nextSelectable = nextRows
+                    .filter((item) => item.enabled && item.resolution.trim())
+                    .map((item) => item.resolution.trim())
+                  const nextDefault = nextSelectable.includes(defaultResolution)
+                    ? defaultResolution
+                    : nextSelectable[0] || ''
                   setDefault(nextDefault)
-                  syncRule(mediaType, prices, nextEnabled, nextDefault)
+                  updateRows(nextRows, nextDefault)
                 }}
-                aria-label={`${resolution} ${t('Enabled')}`}
+                aria-label={`${row.resolution || t('Resolution')} ${t('Enabled')}`}
               />
-              <div className='text-sm font-medium'>{resolution}</div>
               <Input
-                value={prices[resolution] || ''}
+                value={row.resolution}
+                placeholder={t('Resolution')}
+                onChange={(event) => {
+                  const value = event.target.value
+                  const nextRows = rows.map((item) =>
+                    item.id === row.id ? { ...item, resolution: value } : item
+                  )
+                  const nextDefault =
+                    defaultResolution === row.resolution
+                      ? value.trim()
+                      : defaultResolution
+                  setDefault(nextDefault)
+                  updateRows(nextRows, nextDefault)
+                }}
+              />
+              <Input
+                value={row.price}
                 inputMode='decimal'
                 placeholder='0.01'
                 onChange={(event) => {
                   const value = event.target.value
                   if (!numericDraftRegex.test(value)) return
-                  const nextPrices = { ...prices, [resolution]: value }
-                  setPrices(nextPrices)
-                  syncRule(mediaType, nextPrices, enabled, defaultResolution)
+                  const nextRows = rows.map((item) =>
+                    item.id === row.id ? { ...item, price: value } : item
+                  )
+                  updateRows(nextRows)
                 }}
-                disabled={!enabled[resolution]}
+                disabled={!row.enabled}
               />
+              <Button
+                type='button'
+                variant='ghost'
+                size='icon'
+                onClick={() => {
+                  const nextRows = rows.filter((item) => item.id !== row.id)
+                  const nextSelectable = nextRows
+                    .filter((item) => item.enabled && item.resolution.trim())
+                    .map((item) => item.resolution.trim())
+                  const nextDefault = nextSelectable.includes(defaultResolution)
+                    ? defaultResolution
+                    : nextSelectable[0] || ''
+                  setDefault(nextDefault)
+                  updateRows(nextRows, nextDefault)
+                }}
+                aria-label={t('Delete')}
+              >
+                <Trash2 />
+              </Button>
             </div>
           ))}
         </div>
+
+        <Button
+          type='button'
+          variant='outline'
+          size='sm'
+          onClick={() => {
+            const nextRows = [...rows, createEmptyPriceRow()]
+            updateRows(nextRows)
+          }}
+        >
+          <Plus data-icon='inline-start' />
+          {t('Add resolution')}
+        </Button>
 
         <div className='flex items-center gap-3'>
           <Label className='text-sm'>{t('Default resolution')}</Label>
@@ -220,7 +237,7 @@ export function PerRequestPricingEditor({
             onValueChange={(next) => {
               if (!next) return
               setDefault(next)
-              syncRule(mediaType, prices, enabled, next)
+              syncRule(mediaType, rows, next)
             }}
           >
             <SelectTrigger className='w-[140px]'>
@@ -280,24 +297,18 @@ export function PerRequestPricingEditor({
       {subtype === 'image' &&
         renderRows(
           'image',
-          IMAGE_RESOLUTION_ROWS,
-          imageEnabled,
-          imagePrices,
+          imageRows,
           imageDefault,
-          setImageEnabled,
-          setImagePrices,
+          setImageRows,
           setImageDefault
         )}
 
       {subtype === 'video' &&
         renderRows(
           'video',
-          VIDEO_RESOLUTION_ROWS,
-          videoEnabled,
-          videoPrices,
+          videoRows,
           videoDefault,
-          setVideoEnabled,
-          setVideoPrices,
+          setVideoRows,
           setVideoDefault
         )}
     </div>

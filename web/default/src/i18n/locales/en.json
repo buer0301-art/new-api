@@ -4459,6 +4459,8 @@
     "Image resolution": "Image resolution",
     "Resolution pricing": "Resolution pricing",
     "Unknown resolution: Reject request": "Unknown resolution: Reject request",
-    "Video resolution": "Video resolution"
+    "Video resolution": "Video resolution",
+    "Add resolution": "Add resolution",
+    "Resolution": "Resolution"
   }
 }

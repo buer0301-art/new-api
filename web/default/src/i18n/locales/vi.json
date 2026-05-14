@@ -4459,6 +4459,8 @@
     "Image resolution": "Độ phân giải ảnh",
     "Resolution pricing": "Giá theo độ phân giải",
     "Unknown resolution: Reject request": "Độ phân giải không xác định: từ chối yêu cầu",
-    "Video resolution": "Độ phân giải video"
+    "Video resolution": "Độ phân giải video",
+    "Add resolution": "Thêm độ phân giải",
+    "Resolution": "Độ phân giải"
   }
 }

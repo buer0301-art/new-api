@@ -25,47 +25,6 @@ type VideoPricingInput struct {
 	QuotaPerUnit       float64
 }
 
-func NormalizeResolution(mediaType, raw string) (string, bool) {
-	mediaType = strings.TrimSpace(strings.ToLower(mediaType))
-	raw = strings.TrimSpace(strings.ToLower(raw))
-	if raw == "" {
-		return "", false
-	}
-	switch mediaType {
-	case MediaTypeImage:
-		switch raw {
-		case "1k", "1024x1024", "1024x1536", "1536x1024":
-			return "1K", true
-		case "2k", "2048x2048":
-			return "2K", true
-		case "4k", "4096x4096", "3840x2160", "2160x3840":
-			return "4K", true
-		default:
-			if raw == "1k" || raw == "2k" || raw == "4k" {
-				return strings.ToUpper(raw), true
-			}
-		}
-	case MediaTypeVideo:
-		switch {
-		case raw == "480" || raw == "480p" || strings.Contains(raw, "480"):
-			return "480", true
-		case raw == "980" || raw == "980p" || strings.Contains(raw, "980"):
-			return "980", true
-		case raw == "1k" || raw == "1080" || raw == "1080p" || strings.Contains(raw, "1080"):
-			return "1K", true
-		case raw == "2k" || strings.Contains(raw, "1440") || strings.Contains(raw, "2048"):
-			return "2K", true
-		case raw == "4k" || raw == "2160" || raw == "2160p" || strings.Contains(raw, "2160") || strings.Contains(raw, "3840") || strings.Contains(raw, "4096"):
-			return "4K", true
-		default:
-			if raw == "1k" || raw == "2k" || raw == "4k" {
-				return strings.ToUpper(raw), true
-			}
-		}
-	}
-	return "", false
-}
-
 func ResolveImagePricing(model string, rule PerRequestPriceRule, input ImagePricingInput) (*types.ResolvedPerRequestPricing, error) {
 	if rule.MediaType != MediaTypeImage {
 		return nil, fmt.Errorf("model %s: media type mismatch, expected %s", model, MediaTypeImage)
@@ -127,13 +86,10 @@ func resolveRulePrice(model string, rule PerRequestPriceRule, mediaType, raw str
 	raw = strings.TrimSpace(raw)
 	resolution := rule.DefaultResolution
 	if raw != "" {
-		normalized, ok := NormalizeResolution(mediaType, raw)
-		if !ok {
-			if !rule.FallbackEnabled {
-				return "", 0, fmt.Errorf("model %s: unknown %s resolution %q", model, mediaType, raw)
-			}
-		} else {
-			resolution = normalized
+		if configuredResolution, ok := matchConfiguredResolution(raw, rule.Prices); ok {
+			resolution = configuredResolution
+		} else if !rule.FallbackEnabled {
+			return "", 0, fmt.Errorf("model %s: unknown %s resolution %q", model, mediaType, raw)
 		}
 	}
 	if resolution == "" {
@@ -152,6 +108,23 @@ func resolveRulePrice(model string, rule PerRequestPriceRule, mediaType, raw str
 		return "", 0, fmt.Errorf("model %s: default resolution %q not configured", model, resolution)
 	}
 	return resolution, unitPrice, nil
+}
+
+func matchConfiguredResolution(raw string, prices map[string]float64) (string, bool) {
+	raw = normalizeResolutionKey(raw)
+	if raw == "" {
+		return "", false
+	}
+	for resolution := range prices {
+		if normalizeResolutionKey(resolution) == raw {
+			return resolution, true
+		}
+	}
+	return "", false
+}
+
+func normalizeResolutionKey(value string) string {
+	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(value)), ""))
 }
 
 func parseSeconds(seconds string, duration int) (int, error) {

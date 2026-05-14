@@ -4459,6 +4459,8 @@
     "Image resolution": "画像解像度",
     "Resolution pricing": "解像度別料金",
     "Unknown resolution: Reject request": "不明な解像度: リクエストを拒否",
-    "Video resolution": "動画解像度"
+    "Video resolution": "動画解像度",
+    "Add resolution": "解像度を追加",
+    "Resolution": "解像度"
   }
 }

@@ -4459,6 +4459,8 @@
     "Image resolution": "Разрешение изображения",
     "Resolution pricing": "Цена по разрешению",
     "Unknown resolution: Reject request": "Неизвестное разрешение: отклонить запрос",
-    "Video resolution": "Разрешение видео"
+    "Video resolution": "Разрешение видео",
+    "Add resolution": "Добавить разрешение",
+    "Resolution": "Разрешение"
   }
 }

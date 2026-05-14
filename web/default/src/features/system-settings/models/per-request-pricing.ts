@@ -32,21 +32,34 @@ export type PerRequestPriceRule = {
 
 export type PerRequestRules = Record<string, PerRequestPriceRule>
 
-export const IMAGE_RESOLUTION_ROWS = ['1K', '2K', '4K'] as const
-export const VIDEO_RESOLUTION_ROWS = ['480', '980', '1K', '2K', '4K'] as const
+export type PerRequestPriceRow = {
+  id: string
+  resolution: string
+  price: string
+  enabled: boolean
+}
+
+export const DEFAULT_IMAGE_RESOLUTION_ROWS = ['1K', '2K', '4K'] as const
+export const DEFAULT_VIDEO_RESOLUTION_ROWS = [
+  '480p',
+  '720p',
+  '1080p',
+  '2K',
+  '4K',
+] as const
 
 const MEDIA_CONFIG: Record<
   PerRequestMediaType,
-  { unit: PerRequestUnit; rows: readonly string[]; label: string }
+  { unit: PerRequestUnit; defaults: readonly string[]; label: string }
 > = {
   image: {
     unit: 'image',
-    rows: IMAGE_RESOLUTION_ROWS,
+    defaults: DEFAULT_IMAGE_RESOLUTION_ROWS,
     label: 'image',
   },
   video: {
     unit: 'second',
-    rows: VIDEO_RESOLUTION_ROWS,
+    defaults: DEFAULT_VIDEO_RESOLUTION_ROWS,
     label: 'video',
   },
 }
@@ -62,6 +75,10 @@ function toTrimmedString(value: unknown) {
 function toFiniteNumber(value: unknown): number | null {
   const parsed = typeof value === 'number' ? value : Number(value)
   return Number.isFinite(parsed) ? parsed : null
+}
+
+function normalizeResolutionKey(value: string) {
+  return value.trim().replace(/\s+/g, '').toLowerCase()
 }
 
 function normalizeRule(
@@ -155,12 +172,9 @@ export function summarizePerRequestRule(rule?: PerRequestPriceRule | null) {
   if (!rule || !rule.media_type) return ''
   const mediaType = rule.media_type
   const mediaLabel = getMediaLabel(mediaType)
-  const rows = MEDIA_CONFIG[mediaType].rows
   const unitLabel = mediaType === 'image' ? 'image' : 's'
-  const entries = rows
-    .map((resolution) => {
-      const price = rule.prices?.[resolution]
-      if (price === undefined) return ''
+  const entries = Object.entries(rule.prices || {})
+    .map(([resolution, price]) => {
       return `${resolution} $${Number(price)
         .toFixed(3)
         .replace(/\.?0+$/, '')}/${unitLabel}`
@@ -171,19 +185,66 @@ export function summarizePerRequestRule(rule?: PerRequestPriceRule | null) {
     : mediaLabel
 }
 
+export function createDefaultPriceRows(mediaType: PerRequestMediaType) {
+  return MEDIA_CONFIG[mediaType].defaults.map((resolution) => ({
+    id: createPriceRowId(),
+    resolution,
+    price: '',
+    enabled: true,
+  }))
+}
+
+export function createPriceRowsFromRule(
+  mediaType: PerRequestMediaType,
+  rule?: PerRequestPriceRule | null
+) {
+  if (rule?.media_type === mediaType && isPlainObject(rule.prices)) {
+    return Object.entries(rule.prices).map(([resolution, price]) => ({
+      id: createPriceRowId(),
+      resolution,
+      price: String(price),
+      enabled: true,
+    }))
+  }
+  return createDefaultPriceRows(mediaType)
+}
+
+export function createEmptyPriceRow() {
+  return {
+    id: createPriceRowId(),
+    resolution: '',
+    price: '',
+    enabled: true,
+  }
+}
+
+export function getConfiguredDefaultResolution(
+  mediaType: PerRequestMediaType,
+  rule?: PerRequestPriceRule | null
+) {
+  if (rule?.media_type === mediaType && rule.default_resolution) {
+    return rule.default_resolution
+  }
+  return MEDIA_CONFIG[mediaType].defaults[0] || ''
+}
+
 export function buildRuleFromRows(
   mediaType: PerRequestMediaType,
-  prices: Record<string, string>,
-  enabled: Record<string, boolean>,
+  rows: PerRequestPriceRow[],
   defaultResolution: string
 ): PerRequestPriceRule | null {
   const config = MEDIA_CONFIG[mediaType]
   const normalizedPrices: Record<string, number> = {}
   const pricedRows: string[] = []
+  const seen = new Set<string>()
 
-  config.rows.forEach((resolution) => {
-    if (!enabled[resolution]) return
-    const price = toFiniteNumber(prices[resolution])
+  rows.forEach((row) => {
+    if (!row.enabled) return
+    const resolution = toTrimmedString(row.resolution)
+    const resolutionKey = normalizeResolutionKey(resolution)
+    if (!resolution || seen.has(resolutionKey)) return
+    seen.add(resolutionKey)
+    const price = toFiniteNumber(row.price)
     if (price !== null && price >= 0) {
       normalizedPrices[resolution] = price
       pricedRows.push(resolution)
@@ -204,4 +265,11 @@ export function buildRuleFromRows(
     default_resolution: fallbackResolution,
     fallback_enabled: false,
   }
+}
+
+function createPriceRowId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID()
+  }
+  return Math.random().toString(36).slice(2)
 }
