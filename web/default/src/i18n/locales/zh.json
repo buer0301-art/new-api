@@ -4452,6 +4452,13 @@
     "Send the exact amount to the address below. The order will update after payment is detected.": "请向下方地址发送精确金额。检测到付款后订单会自动更新。",
     "Used to sign orders and verify callbacks": "用于签名订单和验证回调",
     "Web3 Pay app key (leave blank unless updating)": "Web3 Pay App Key（不更新请留空）",
-    "Web3 Pay Gateway": "Web3 Pay 网关"
+    "Web3 Pay Gateway": "Web3 Pay 网关",
+    "At least one enabled resolution price is required.": "至少需要填写一个已启用分辨率的价格。",
+    "Cost in USD per request, regardless of media resolution.": "每次请求的美元价格，不区分媒体分辨率。",
+    "Default resolution": "默认分辨率",
+    "Image resolution": "图片分辨率",
+    "Resolution pricing": "分辨率定价",
+    "Unknown resolution: Reject request": "未知分辨率：拒绝请求",
+    "Video resolution": "视频分辨率"
   }
 }

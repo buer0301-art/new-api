@@ -37,6 +37,7 @@ const getModelDefaults = (settings: BillingSettings) => ({
   ExposeRatioEnabled: settings.ExposeRatioEnabled,
   BillingMode: settings['billing_setting.billing_mode'],
   BillingExpr: settings['billing_setting.billing_expr'],
+  PerRequestRules: settings['per_request_pricing.rules'],
 })
 
 const getGroupDefaults = (settings: BillingSettings) => ({
@@ -157,9 +158,7 @@ const BILLING_SECTIONS = [
           Web3PayEnabled: settings.Web3PayEnabled,
           Web3PayGatewayAPIBase: settings.Web3PayGatewayAPIBase,
           Web3PayCheckoutMode:
-            settings.Web3PayCheckoutMode === 'redirect'
-              ? 'redirect'
-              : 'inline',
+            settings.Web3PayCheckoutMode === 'redirect' ? 'redirect' : 'inline',
           Web3PayAppKey: settings.Web3PayAppKey,
           Web3PayApiSecret: settings.Web3PayApiSecret,
           Web3PayUnitPrice: settings.Web3PayUnitPrice,

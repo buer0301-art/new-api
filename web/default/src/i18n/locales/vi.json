@@ -4452,6 +4452,13 @@
     "Send the exact amount to the address below. The order will update after payment is detected.": "Gửi đúng số tiền đến địa chỉ bên dưới. Đơn hàng sẽ cập nhật sau khi phát hiện thanh toán.",
     "Used to sign orders and verify callbacks": "Dùng để ký đơn hàng và xác minh callback",
     "Web3 Pay app key (leave blank unless updating)": "App Key Web3 Pay (để trống nếu không cập nhật)",
-    "Web3 Pay Gateway": "Cổng Web3 Pay"
+    "Web3 Pay Gateway": "Cổng Web3 Pay",
+    "At least one enabled resolution price is required.": "Cần ít nhất một giá cho độ phân giải đã bật.",
+    "Cost in USD per request, regardless of media resolution.": "Chi phí USD cho mỗi yêu cầu, không phụ thuộc độ phân giải phương tiện.",
+    "Default resolution": "Độ phân giải mặc định",
+    "Image resolution": "Độ phân giải ảnh",
+    "Resolution pricing": "Giá theo độ phân giải",
+    "Unknown resolution: Reject request": "Độ phân giải không xác định: từ chối yêu cầu",
+    "Video resolution": "Độ phân giải video"
   }
 }

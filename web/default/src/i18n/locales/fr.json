@@ -4452,6 +4452,13 @@
     "Send the exact amount to the address below. The order will update after payment is detected.": "Envoyez le montant exact à l'adresse ci-dessous. La commande sera mise à jour après détection du paiement.",
     "Used to sign orders and verify callbacks": "Utilisé pour signer les commandes et vérifier les callbacks",
     "Web3 Pay app key (leave blank unless updating)": "App Key Web3 Pay (laissez vide sauf mise à jour)",
-    "Web3 Pay Gateway": "Passerelle Web3 Pay"
+    "Web3 Pay Gateway": "Passerelle Web3 Pay",
+    "At least one enabled resolution price is required.": "Au moins un prix de résolution activée est requis.",
+    "Cost in USD per request, regardless of media resolution.": "Coût en USD par requête, quelle que soit la résolution du média.",
+    "Default resolution": "Résolution par défaut",
+    "Image resolution": "Résolution image",
+    "Resolution pricing": "Tarification par résolution",
+    "Unknown resolution: Reject request": "Résolution inconnue : rejeter la requête",
+    "Video resolution": "Résolution vidéo"
   }
 }

@@ -65,6 +65,12 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { combineBillingExpr } from '@/features/pricing/lib/billing-expr'
+import {
+  summarizePerRequestRule,
+  type PerRequestPriceRule,
+  type PerRequestSubtype,
+} from './per-request-pricing'
+import { PerRequestPricingEditor } from './per-request-pricing-editor'
 import { TieredPricingEditor } from './tiered-pricing-editor'
 
 const createModelPricingSchema = (t: (key: string) => string) =>
@@ -106,6 +112,7 @@ export type ModelRatioData = {
   billingMode?: PricingMode
   billingExpr?: string
   requestRuleExpr?: string
+  perRequestRule?: PerRequestPriceRule
 }
 
 type ModelPricingSheetProps = {
@@ -295,6 +302,8 @@ function buildPreviewRows(
   promptPrice: string,
   lanePrices: Record<LaneKey, string>,
   laneEnabled: Record<LaneKey, boolean>,
+  perRequestSubtype: PerRequestSubtype,
+  perRequestRule: PerRequestPriceRule | null,
   t: (key: string) => string
 ): PreviewRow[] {
   if (mode === 'tiered_expr') {
@@ -311,6 +320,17 @@ function buildPreviewRows(
   }
 
   if (mode === 'per-request') {
+    if (perRequestSubtype !== 'fixed' && perRequestRule) {
+      return [
+        {
+          key: 'price',
+          label: t('Resolution pricing'),
+          value: summarizePerRequestRule(perRequestRule) || t('Empty'),
+          multiline: true,
+        },
+      ]
+    }
+
     return [
       {
         key: 'price',
@@ -429,6 +449,10 @@ export function ModelPricingEditorPanel({
   })
   const [billingExpr, setBillingExpr] = useState('')
   const [requestRuleExpr, setRequestRuleExpr] = useState('')
+  const [perRequestSubtype, setPerRequestSubtype] =
+    useState<PerRequestSubtype>('fixed')
+  const [perRequestRule, setPerRequestRule] =
+    useState<PerRequestPriceRule | null>(null)
   const [previewOpen, setPreviewOpen] = useState(true)
   const isEditMode = !!editData
 
@@ -465,10 +489,18 @@ export function ModelPricingEditorPanel({
       setPricingMode(
         editData.billingMode === 'tiered_expr'
           ? 'tiered_expr'
-          : editData.price
+          : editData.price || editData.perRequestRule
             ? 'per-request'
             : 'per-token'
       )
+      setPerRequestSubtype(
+        editData.perRequestRule?.media_type === 'video'
+          ? 'video'
+          : editData.perRequestRule?.media_type === 'image'
+            ? 'image'
+            : 'fixed'
+      )
+      setPerRequestRule(editData.perRequestRule || null)
       setBillingExpr(editData.billingExpr || '')
       setRequestRuleExpr(editData.requestRuleExpr || '')
     } else {
@@ -484,6 +516,8 @@ export function ModelPricingEditorPanel({
         audioCompletionRatio: '',
       })
       setPricingMode('per-token')
+      setPerRequestSubtype('fixed')
+      setPerRequestRule(null)
       setBillingExpr('')
       setRequestRuleExpr('')
     }
@@ -614,6 +648,14 @@ export function ModelPricingEditorPanel({
     }
   }
 
+  const handlePerRequestSubtypeChange = (value: string) => {
+    const nextSubtype = value as PerRequestSubtype
+    setPerRequestSubtype(nextSubtype)
+    if (nextSubtype === 'fixed') {
+      setPerRequestRule(null)
+    }
+  }
+
   const watchedValues = form.watch()
   const previewRows = useMemo(
     () =>
@@ -625,6 +667,8 @@ export function ModelPricingEditorPanel({
         promptPrice,
         lanePrices,
         laneEnabled,
+        perRequestSubtype,
+        perRequestRule,
         t
       ),
     [
@@ -634,6 +678,8 @@ export function ModelPricingEditorPanel({
       pricingMode,
       promptPrice,
       requestRuleExpr,
+      perRequestSubtype,
+      perRequestRule,
       t,
       watchedValues,
     ]
@@ -681,8 +727,25 @@ export function ModelPricingEditorPanel({
       nextWarnings.push(t('Audio output price requires an audio input price.'))
     }
 
+    if (
+      pricingMode === 'per-request' &&
+      perRequestSubtype !== 'fixed' &&
+      !perRequestRule
+    ) {
+      nextWarnings.push(t('At least one enabled resolution price is required.'))
+    }
+
     return nextWarnings
-  }, [editData, laneEnabled, lanePrices, pricingMode, promptPrice, t])
+  }, [
+    editData,
+    laneEnabled,
+    lanePrices,
+    perRequestRule,
+    perRequestSubtype,
+    pricingMode,
+    promptPrice,
+    t,
+  ])
 
   const handleSubmit = (values: ModelPricingFormValues) => {
     if (
@@ -709,6 +772,17 @@ export function ModelPricingEditorPanel({
       return
     }
 
+    if (
+      pricingMode === 'per-request' &&
+      perRequestSubtype !== 'fixed' &&
+      !perRequestRule
+    ) {
+      form.setError('price', {
+        message: t('At least one enabled resolution price is required.'),
+      })
+      return
+    }
+
     const data: ModelRatioData = {
       name: values.name.trim(),
       billingMode: pricingMode,
@@ -725,6 +799,11 @@ export function ModelPricingEditorPanel({
     if (pricingMode === 'tiered_expr') {
       data.billingExpr = billingExpr
       data.requestRuleExpr = requestRuleExpr
+    } else if (pricingMode === 'per-request') {
+      if (perRequestSubtype !== 'fixed') {
+        data.price = ''
+        data.perRequestRule = perRequestRule || undefined
+      }
     }
 
     onSave(data)
@@ -856,39 +935,18 @@ export function ModelPricingEditorPanel({
                   value='per-request'
                   className='flex flex-col gap-5'
                 >
-                  <FormField
-                    control={form.control}
-                    name='price'
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('Fixed price')}</FormLabel>
-                        <FormControl>
-                          <InputGroup>
-                            <InputGroupAddon>$</InputGroupAddon>
-                            <InputGroupInput
-                              inputMode='decimal'
-                              placeholder='0.01'
-                              {...field}
-                              onChange={(event) => {
-                                const value = event.target.value
-                                if (numericDraftRegex.test(value)) {
-                                  field.onChange(value)
-                                }
-                              }}
-                            />
-                            <InputGroupAddon align='inline-end'>
-                              {t('per request')}
-                            </InputGroupAddon>
-                          </InputGroup>
-                        </FormControl>
-                        <FormDescription>
-                          {t(
-                            'Cost in USD per request, regardless of tokens used.'
-                          )}
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                  <PerRequestPricingEditor
+                    name={watchedValues.name}
+                    price={form.watch('price') || ''}
+                    rule={perRequestRule}
+                    subtype={perRequestSubtype}
+                    onPriceChange={(value) => {
+                      if (numericDraftRegex.test(value)) {
+                        setFormValue('price', value)
+                      }
+                    }}
+                    onRuleChange={setPerRequestRule}
+                    onSubtypeChange={handlePerRequestSubtypeChange}
                   />
                 </TabsContent>
 

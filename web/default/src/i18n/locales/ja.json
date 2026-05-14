@@ -4452,6 +4452,13 @@
     "Send the exact amount to the address below. The order will update after payment is detected.": "下記アドレスへ正確な金額を送金してください。支払い検出後に注文が更新されます。",
     "Used to sign orders and verify callbacks": "注文署名とコールバック検証に使用",
     "Web3 Pay app key (leave blank unless updating)": "Web3 Pay App Key（更新しない場合は空欄）",
-    "Web3 Pay Gateway": "Web3 Pay ゲートウェイ"
+    "Web3 Pay Gateway": "Web3 Pay ゲートウェイ",
+    "At least one enabled resolution price is required.": "有効な解像度価格を少なくとも1つ入力してください。",
+    "Cost in USD per request, regardless of media resolution.": "メディア解像度に関係なく、リクエストごとのUSDコスト。",
+    "Default resolution": "デフォルト解像度",
+    "Image resolution": "画像解像度",
+    "Resolution pricing": "解像度別料金",
+    "Unknown resolution: Reject request": "不明な解像度: リクエストを拒否",
+    "Video resolution": "動画解像度"
   }
 }

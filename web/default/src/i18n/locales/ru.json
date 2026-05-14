@@ -4452,6 +4452,13 @@
     "Send the exact amount to the address below. The order will update after payment is detected.": "Отправьте точную сумму на адрес ниже. Заказ обновится после обнаружения платежа.",
     "Used to sign orders and verify callbacks": "Используется для подписи заказов и проверки callback",
     "Web3 Pay app key (leave blank unless updating)": "App Key Web3 Pay (оставьте пустым, если не обновляете)",
-    "Web3 Pay Gateway": "Шлюз Web3 Pay"
+    "Web3 Pay Gateway": "Шлюз Web3 Pay",
+    "At least one enabled resolution price is required.": "Требуется хотя бы одна цена для включенного разрешения.",
+    "Cost in USD per request, regardless of media resolution.": "Стоимость в USD за запрос независимо от разрешения медиа.",
+    "Default resolution": "Разрешение по умолчанию",
+    "Image resolution": "Разрешение изображения",
+    "Resolution pricing": "Цена по разрешению",
+    "Unknown resolution: Reject request": "Неизвестное разрешение: отклонить запрос",
+    "Video resolution": "Разрешение видео"
   }
 }

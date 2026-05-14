@@ -4452,6 +4452,13 @@
     "Send the exact amount to the address below. The order will update after payment is detected.": "Send the exact amount to the address below. The order will update after payment is detected.",
     "Used to sign orders and verify callbacks": "Used to sign orders and verify callbacks",
     "Web3 Pay app key (leave blank unless updating)": "Web3 Pay app key (leave blank unless updating)",
-    "Web3 Pay Gateway": "Web3 Pay Gateway"
+    "Web3 Pay Gateway": "Web3 Pay Gateway",
+    "At least one enabled resolution price is required.": "At least one enabled resolution price is required.",
+    "Cost in USD per request, regardless of media resolution.": "Cost in USD per request, regardless of media resolution.",
+    "Default resolution": "Default resolution",
+    "Image resolution": "Image resolution",
+    "Resolution pricing": "Resolution pricing",
+    "Unknown resolution: Reject request": "Unknown resolution: Reject request",
+    "Video resolution": "Video resolution"
   }
 }
