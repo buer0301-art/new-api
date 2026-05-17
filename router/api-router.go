@@ -211,6 +211,7 @@ func SetApiRouter(router *gin.Engine) {
 			performanceRoute.POST("/reset_stats", controller.ResetPerformanceStats)
 			performanceRoute.POST("/gc", controller.ForceGC)
 			performanceRoute.GET("/logs", controller.GetLogFiles)
+			performanceRoute.GET("/logs/search", controller.SearchServerLogs)
 			performanceRoute.DELETE("/logs", controller.CleanupLogFiles)
 		}
 		ratioSyncRoute := apiRouter.Group("/ratio_sync")

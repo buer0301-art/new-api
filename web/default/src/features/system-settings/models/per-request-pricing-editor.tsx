@@ -38,10 +38,12 @@ import {
   createEmptyPriceRow,
   createPriceRowsFromRule,
   getConfiguredDefaultResolution,
+  IMAGE_RESOLUTION_REFERENCE,
   type PerRequestMediaType,
   type PerRequestPriceRule,
   type PerRequestPriceRow,
   type PerRequestSubtype,
+  VIDEO_RESOLUTION_REFERENCE,
 } from './per-request-pricing'
 
 type PerRequestPricingEditorProps = {
@@ -77,23 +79,26 @@ export function PerRequestPricingEditor({
   const [imageRows, setImageRows] = useState<PerRequestPriceRow[]>(() =>
     createDefaultPriceRows('image')
   )
-  const [imageDefault, setImageDefault] = useState('1K')
+  const [imageDefault, setImageDefault] = useState('')
   const [videoRows, setVideoRows] = useState<PerRequestPriceRow[]>(() =>
     createDefaultPriceRows('video')
   )
-  const [videoDefault, setVideoDefault] = useState('480p')
+  const [videoDefault, setVideoDefault] = useState('')
 
   useEffect(() => {
-    if (!rule?.media_type) return
-
-    if (rule.media_type === 'image') {
+    if (rule?.media_type === 'image') {
       setImageRows(createPriceRowsFromRule('image', rule))
       setImageDefault(getConfiguredDefaultResolution('image', rule))
-    } else {
+    } else if (rule?.media_type === 'video') {
       setVideoRows(createPriceRowsFromRule('video', rule))
       setVideoDefault(getConfiguredDefaultResolution('video', rule))
+    } else {
+      setImageRows(createDefaultPriceRows('image'))
+      setImageDefault(getConfiguredDefaultResolution('image', null))
+      setVideoRows(createDefaultPriceRows('video'))
+      setVideoDefault(getConfiguredDefaultResolution('video', null))
     }
-  }, [rule])
+  }, [name])
 
   const syncRule = (
     mediaType: PerRequestMediaType,
@@ -138,8 +143,30 @@ export function PerRequestPricingEditor({
       syncRule(mediaType, nextRows, nextDefault)
     }
 
+    const normalizeDefault = (nextRows: PerRequestPriceRow[]) => {
+      const nextSelectable = nextRows
+        .filter((item) => item.enabled && item.resolution.trim())
+        .map((item) => item.resolution.trim())
+      if (!defaultResolution) return nextSelectable[0] || ''
+      return nextSelectable.includes(defaultResolution)
+        ? defaultResolution
+        : nextSelectable[0] || ''
+    }
+
+    const reference =
+      mediaType === 'image'
+        ? IMAGE_RESOLUTION_REFERENCE
+        : VIDEO_RESOLUTION_REFERENCE
+
     return (
       <div className='space-y-4'>
+        <div className='text-muted-foreground text-xs'>
+          {t(
+            'Reference resolutions: {{resolutions}}. You can enter any custom resolution label.',
+            { resolutions: reference }
+          )}
+        </div>
+
         <div className='rounded-lg border'>
           {rows.map((row) => (
             <div
@@ -152,12 +179,7 @@ export function PerRequestPricingEditor({
                   const nextRows = rows.map((item) =>
                     item.id === row.id ? { ...item, enabled: checked } : item
                   )
-                  const nextSelectable = nextRows
-                    .filter((item) => item.enabled && item.resolution.trim())
-                    .map((item) => item.resolution.trim())
-                  const nextDefault = nextSelectable.includes(defaultResolution)
-                    ? defaultResolution
-                    : nextSelectable[0] || ''
+                  const nextDefault = normalizeDefault(nextRows)
                   setDefault(nextDefault)
                   updateRows(nextRows, nextDefault)
                 }}
@@ -199,12 +221,7 @@ export function PerRequestPricingEditor({
                 size='icon'
                 onClick={() => {
                   const nextRows = rows.filter((item) => item.id !== row.id)
-                  const nextSelectable = nextRows
-                    .filter((item) => item.enabled && item.resolution.trim())
-                    .map((item) => item.resolution.trim())
-                  const nextDefault = nextSelectable.includes(defaultResolution)
-                    ? defaultResolution
-                    : nextSelectable[0] || ''
+                  const nextDefault = normalizeDefault(nextRows)
                   setDefault(nextDefault)
                   updateRows(nextRows, nextDefault)
                 }}
@@ -234,6 +251,7 @@ export function PerRequestPricingEditor({
           <Select
             items={selectableRows.map((value) => ({ value, label: value }))}
             value={defaultResolution}
+            disabled={selectableRows.length === 0}
             onValueChange={(next) => {
               if (!next) return
               setDefault(next)

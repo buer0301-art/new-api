@@ -39,27 +39,21 @@ export type PerRequestPriceRow = {
   enabled: boolean
 }
 
-export const DEFAULT_IMAGE_RESOLUTION_ROWS = ['1K', '2K', '4K'] as const
-export const DEFAULT_VIDEO_RESOLUTION_ROWS = [
-  '480p',
-  '720p',
-  '1080p',
-  '2K',
-  '4K',
-] as const
+export const IMAGE_RESOLUTION_REFERENCE = '1K / 2K / 4K'
+export const VIDEO_RESOLUTION_REFERENCE = '480 / 980 / 1K / 2K / 4K'
 
 const MEDIA_CONFIG: Record<
   PerRequestMediaType,
-  { unit: PerRequestUnit; defaults: readonly string[]; label: string }
+  { unit: PerRequestUnit; defaultResolution: string; label: string }
 > = {
   image: {
     unit: 'image',
-    defaults: DEFAULT_IMAGE_RESOLUTION_ROWS,
+    defaultResolution: '',
     label: 'image',
   },
   video: {
     unit: 'second',
-    defaults: DEFAULT_VIDEO_RESOLUTION_ROWS,
+    defaultResolution: '',
     label: 'video',
   },
 }
@@ -73,6 +67,7 @@ function toTrimmedString(value: unknown) {
 }
 
 function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === 'string' && value.trim() === '') return null
   const parsed = typeof value === 'number' ? value : Number(value)
   return Number.isFinite(parsed) ? parsed : null
 }
@@ -186,12 +181,8 @@ export function summarizePerRequestRule(rule?: PerRequestPriceRule | null) {
 }
 
 export function createDefaultPriceRows(mediaType: PerRequestMediaType) {
-  return MEDIA_CONFIG[mediaType].defaults.map((resolution) => ({
-    id: createPriceRowId(),
-    resolution,
-    price: '',
-    enabled: true,
-  }))
+  if (!MEDIA_CONFIG[mediaType]) return []
+  return [createEmptyPriceRow()]
 }
 
 export function createPriceRowsFromRule(
@@ -225,7 +216,7 @@ export function getConfiguredDefaultResolution(
   if (rule?.media_type === mediaType && rule.default_resolution) {
     return rule.default_resolution
   }
-  return MEDIA_CONFIG[mediaType].defaults[0] || ''
+  return MEDIA_CONFIG[mediaType].defaultResolution || ''
 }
 
 export function buildRuleFromRows(

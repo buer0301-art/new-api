@@ -110,6 +110,20 @@ type LogInfo = {
   newest_time?: string
 }
 
+type ServerLogEntry = {
+  timestamp: string
+  level: string
+  request_id: string
+  message: string
+  raw_line: string
+  file_name: string
+}
+
+type ServerLogSearchResponse = {
+  entries: ServerLogEntry[]
+  limit: number
+}
+
 type PerformanceStats = {
   cache_stats?: {
     current_disk_usage_bytes: number
@@ -151,6 +165,13 @@ export function PerformanceSection(props: Props) {
   const [logCleanupMode, setLogCleanupMode] = useState('by_count')
   const [logCleanupValue, setLogCleanupValue] = useState(10)
   const [logCleanupLoading, setLogCleanupLoading] = useState(false)
+  const [serverLogRequestId, setServerLogRequestId] = useState('')
+  const [serverLogKeyword, setServerLogKeyword] = useState('')
+  const [serverLogEntries, setServerLogEntries] = useState<ServerLogEntry[]>(
+    []
+  )
+  const [serverLogSearchLoading, setServerLogSearchLoading] = useState(false)
+  const [serverLogSearchTouched, setServerLogSearchTouched] = useState(false)
 
   const form = useForm<PerfFormValues>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -178,6 +199,42 @@ export function PerformanceSection(props: Props) {
       /* ignore */
     }
   }, [])
+
+  const searchServerLogs = async () => {
+    const requestId = serverLogRequestId.trim()
+    const keyword = serverLogKeyword.trim()
+    if (!requestId && !keyword) {
+      toast.error(t('Enter a request ID or keyword before searching.'))
+      return
+    }
+
+    setServerLogSearchLoading(true)
+    setServerLogSearchTouched(true)
+    try {
+      const res = await api.get<{
+        success: boolean
+        message?: string
+        data?: ServerLogSearchResponse
+      }>('/api/performance/logs/search', {
+        params: {
+          ...(requestId ? { request_id: requestId } : {}),
+          ...(keyword ? { keyword } : {}),
+        },
+      })
+      if (!res.data.success) {
+        throw new Error(res.data.message || t('Failed to search server logs'))
+      }
+      setServerLogEntries(res.data.data?.entries ?? [])
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : t('Failed to search server logs')
+      toast.error(message)
+    } finally {
+      setServerLogSearchLoading(false)
+    }
+  }
 
   useEffect(() => {
     fetchStats()
@@ -625,6 +682,96 @@ export function PerformanceSection(props: Props) {
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className='space-y-4 rounded-lg border p-4'>
+              <div>
+                <h5 className='font-medium'>{t('Runtime Log Search')}</h5>
+                <p className='text-muted-foreground mt-1 text-xs'>
+                  {t(
+                    'Search retained server log files by request ID or keywords to investigate failed requests.'
+                  )}
+                </p>
+              </div>
+
+              <div className='grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'>
+                <Input
+                  value={serverLogRequestId}
+                  onChange={(e) => setServerLogRequestId(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void searchServerLogs()
+                  }}
+                  placeholder={t('Request ID')}
+                />
+                <Input
+                  value={serverLogKeyword}
+                  onChange={(e) => setServerLogKeyword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void searchServerLogs()
+                  }}
+                  placeholder={t('Keywords, separated by spaces or commas')}
+                />
+                <Button
+                  type='button'
+                  onClick={() => void searchServerLogs()}
+                  disabled={serverLogSearchLoading}
+                >
+                  {serverLogSearchLoading
+                    ? t('Searching...')
+                    : t('Search server logs')}
+                </Button>
+              </div>
+
+              <p className='text-muted-foreground text-xs'>
+                {t('Only retained log files can be searched.')}
+              </p>
+
+              {serverLogSearchTouched && (
+                <div className='space-y-3'>
+                  <div className='text-sm font-medium'>
+                    {serverLogEntries.length > 0
+                      ? t('{{count}} matching server log entries found.', {
+                          count: serverLogEntries.length,
+                        })
+                      : t('No matching server log entries found.')}
+                  </div>
+
+                  {serverLogEntries.length > 0 && (
+                    <div className='max-h-[360px] space-y-2 overflow-y-auto rounded-md bg-muted/40 p-3'>
+                      {serverLogEntries.map((entry, index) => (
+                        <div
+                          key={`${entry.file_name}-${entry.timestamp}-${index}`}
+                          className='rounded-md border bg-background p-3 text-xs'
+                        >
+                          <div className='mb-2 flex flex-wrap items-center gap-2'>
+                            {entry.level && (
+                              <span className='rounded bg-muted px-2 py-0.5 font-medium'>
+                                {entry.level}
+                              </span>
+                            )}
+                            {entry.timestamp && (
+                              <span className='text-muted-foreground'>
+                                {entry.timestamp}
+                              </span>
+                            )}
+                            {entry.request_id && (
+                              <span className='font-mono'>
+                                {entry.request_id}
+                              </span>
+                            )}
+                            <span className='text-muted-foreground'>
+                              {entry.file_name}
+                            </span>
+                          </div>
+                          <pre className='whitespace-pre-wrap break-words font-mono'>
+                            {entry.message || entry.raw_line}
+                          </pre>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className='flex flex-wrap items-end gap-3'>
