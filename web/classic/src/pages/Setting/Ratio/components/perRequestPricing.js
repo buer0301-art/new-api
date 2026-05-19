@@ -47,7 +47,17 @@ const toFiniteNumber = (value) => {
 };
 
 const normalizeResolutionKey = (value) =>
-  value.trim().replace(/\s+/g, '').toLowerCase();
+  value.trim().replace(/\s+/g, '').toLowerCase().replace(/\*/g, 'x');
+
+const findConfiguredResolution = (resolutions, targetResolution) => {
+  const targetKey = normalizeResolutionKey(targetResolution);
+  if (!targetKey) return '';
+  return (
+    resolutions.find(
+      (resolution) => normalizeResolutionKey(resolution) === targetKey,
+    ) || ''
+  );
+};
 
 const createPriceRowId = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -116,12 +126,16 @@ export function stringifyPerRequestRules(rules) {
     if (!trimmedModel) return;
 
     const normalized = normalizeRule(rule);
+    const defaultResolution = findConfiguredResolution(
+      Object.keys(normalized.prices),
+      normalized.default_resolution,
+    );
     if (
       !normalized.media_type ||
       !normalized.unit ||
       Object.keys(normalized.prices).length === 0 ||
       !normalized.default_resolution ||
-      normalized.prices[normalized.default_resolution] === undefined
+      !defaultResolution
     ) {
       return;
     }
@@ -130,7 +144,7 @@ export function stringifyPerRequestRules(rules) {
       media_type: normalized.media_type,
       unit: normalized.unit,
       prices: normalized.prices,
-      default_resolution: normalized.default_resolution,
+      default_resolution: defaultResolution,
       fallback_enabled: normalized.fallback_enabled,
     };
   });
@@ -231,7 +245,7 @@ export function buildRuleFromRows(mediaType, rows, defaultResolution) {
   if (Object.keys(normalizedPrices).length === 0) return null;
 
   const fallbackResolution =
-    pricedRows.find((resolution) => resolution === defaultResolution) ||
+    findConfiguredResolution(pricedRows, defaultResolution) ||
     pricedRows[0];
   if (!fallbackResolution) return null;
 

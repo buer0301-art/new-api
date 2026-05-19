@@ -128,13 +128,19 @@ func ValidateRules(rules map[string]PerRequestPriceRule) error {
 		if defaultResolution == "" {
 			return fmt.Errorf("model %s: default resolution cannot be empty", model)
 		}
-		if _, ok := rule.Prices[defaultResolution]; !ok {
+		if _, ok := matchNormalizedResolution(defaultResolution, rule.Prices); !ok {
 			return fmt.Errorf("model %s: default resolution %q must exist in prices", model, defaultResolution)
 		}
+		seenResolutions := map[string]string{}
 		for resolution, price := range rule.Prices {
 			if strings.TrimSpace(resolution) == "" {
 				return fmt.Errorf("model %s: resolution cannot be empty", model)
 			}
+			resolutionKey := normalizeResolutionKey(resolution)
+			if existing, ok := seenResolutions[resolutionKey]; ok {
+				return fmt.Errorf("model %s: duplicate resolution %q conflicts with %q after normalization", model, resolution, existing)
+			}
+			seenResolutions[resolutionKey] = resolution
 			if math.IsNaN(price) || math.IsInf(price, 0) || price < 0 {
 				return fmt.Errorf("model %s: invalid price for resolution %q", model, resolution)
 			}

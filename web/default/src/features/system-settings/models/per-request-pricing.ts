@@ -73,7 +73,20 @@ function toFiniteNumber(value: unknown): number | null {
 }
 
 function normalizeResolutionKey(value: string) {
-  return value.trim().replace(/\s+/g, '').toLowerCase()
+  return value.trim().replace(/\s+/g, '').toLowerCase().replace(/\*/g, 'x')
+}
+
+function findConfiguredResolution(
+  resolutions: string[],
+  targetResolution: string
+) {
+  const targetKey = normalizeResolutionKey(targetResolution)
+  if (!targetKey) return ''
+  return (
+    resolutions.find(
+      (resolution) => normalizeResolutionKey(resolution) === targetKey
+    ) || ''
+  )
 }
 
 function normalizeRule(
@@ -143,12 +156,16 @@ export function stringifyPerRequestRules(rules: PerRequestRules) {
     const trimmedModel = toTrimmedString(model)
     if (!trimmedModel) return
     const normalized = normalizeRule(rule)
+    const defaultResolution = findConfiguredResolution(
+      Object.keys(normalized.prices),
+      normalized.default_resolution
+    )
     if (
       !normalized.media_type ||
       !normalized.unit ||
       Object.keys(normalized.prices).length === 0 ||
       !normalized.default_resolution ||
-      normalized.prices[normalized.default_resolution] === undefined
+      !defaultResolution
     ) {
       return
     }
@@ -156,7 +173,7 @@ export function stringifyPerRequestRules(rules: PerRequestRules) {
       media_type: normalized.media_type,
       unit: normalized.unit,
       prices: normalized.prices,
-      default_resolution: normalized.default_resolution,
+      default_resolution: defaultResolution,
       fallback_enabled: normalized.fallback_enabled,
     }
   })
@@ -245,7 +262,7 @@ export function buildRuleFromRows(
   if (Object.keys(normalizedPrices).length === 0) return null
 
   const fallbackResolution =
-    pricedRows.find((resolution) => resolution === defaultResolution) ||
+    findConfiguredResolution(pricedRows, defaultResolution) ||
     pricedRows[0]
   if (!fallbackResolution) return null
 
