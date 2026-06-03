@@ -18,8 +18,9 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Button } from '@douyinfe/semi-ui';
-import { RefreshCw, Search } from 'lucide-react';
+import { Button, DatePicker } from '@douyinfe/semi-ui';
+import { Filter, RefreshCw, Search } from 'lucide-react';
+import { DATE_RANGE_PRESETS } from '../../constants/console.constants';
 
 const DashboardHeader = ({
   getGreeting,
@@ -27,19 +28,48 @@ const DashboardHeader = ({
   showSearchModal,
   refresh,
   loading,
+  isAdminUser,
+  inputs,
+  handleDateRangeChange,
   t,
 }) => {
   const ICON_BUTTON_CLASS = 'text-white hover:bg-opacity-80 !rounded-full';
 
   return (
-    <div className='flex items-center justify-between mb-4'>
+    <div className='flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4'>
       <h2
         className='text-2xl font-semibold text-gray-800 transition-opacity duration-1000 ease-in-out'
         style={{ opacity: greetingVisible ? 1 : 0 }}
       >
         {getGreeting}
       </h2>
-      <div className='flex gap-3'>
+      <div className='flex flex-wrap items-center justify-end gap-3'>
+        {isAdminUser && (
+          <>
+            <DatePicker
+              type='dateTimeRange'
+              value={[inputs.start_timestamp, inputs.end_timestamp]}
+              placeholder={[t('开始时间'), t('结束时间')]}
+              onChange={handleDateRangeChange}
+              showClear={false}
+              className='w-full md:w-[360px]'
+              presets={DATE_RANGE_PRESETS.map((preset) => ({
+                text: t(preset.text),
+                start: preset.start(),
+                end: preset.end(),
+              }))}
+            />
+            <Button
+              type='tertiary'
+              icon={<Filter size={16} />}
+              onClick={refresh}
+              loading={loading}
+              className='bg-indigo-500 hover:bg-indigo-600 text-white hover:bg-opacity-80 !rounded-full'
+            >
+              {t('查询')}
+            </Button>
+          </>
+        )}
         <Button
           type='tertiary'
           icon={<Search size={16} />}

@@ -24,6 +24,7 @@ import { ClaudeSettingsCard } from './claude-settings-card'
 import { GeminiSettingsCard } from './gemini-settings-card'
 import { GlobalSettingsCard } from './global-settings-card'
 import { GrokSettingsCard } from './grok-settings-card'
+import { RatioSettingsCard } from './ratio-settings-card'
 
 function formatJsonForEditor(value: string, fallback: string) {
   const raw = (value ?? '').toString().trim()
@@ -121,6 +122,43 @@ const MODELS_SECTIONS = [
           'grok.violation_deduction_amount':
             settings['grok.violation_deduction_amount'] ?? 0.05,
         }}
+      />
+    ),
+  },
+  {
+    id: 'model-pricing',
+    titleKey: 'Model Pricing',
+    descriptionKey: 'Configure model pricing ratios and tool prices',
+    build: (settings: ModelSettings) => (
+      <RatioSettingsCard
+        titleKey='Model Pricing'
+        descriptionKey='Configure model pricing ratios and tool prices'
+        modelDefaults={{
+          ModelPrice: settings.ModelPrice,
+          ModelRatio: settings.ModelRatio,
+          CacheRatio: settings.CacheRatio,
+          CreateCacheRatio: settings.CreateCacheRatio,
+          CompletionRatio: settings.CompletionRatio,
+          ImageRatio: settings.ImageRatio,
+          AudioRatio: settings.AudioRatio,
+          AudioCompletionRatio: settings.AudioCompletionRatio,
+          ExposeRatioEnabled: settings.ExposeRatioEnabled,
+          BillingMode: settings['billing_setting.billing_mode'],
+          BillingExpr: settings['billing_setting.billing_expr'],
+          PerRequestRules: settings['per_request_pricing.rules'],
+        }}
+        groupDefaults={{
+          TopupGroupRatio: settings.TopupGroupRatio,
+          GroupRatio: settings.GroupRatio,
+          UserUsableGroups: settings.UserUsableGroups,
+          GroupGroupRatio: settings.GroupGroupRatio,
+          AutoGroups: settings.AutoGroups,
+          DefaultUseAutoGroup: settings.DefaultUseAutoGroup,
+          GroupSpecialUsableGroup:
+            settings['group_ratio_setting.group_special_usable_group'],
+        }}
+        toolPricesDefault={settings['tool_price_setting.prices']}
+        visibleTabs={['models', 'tool-prices', 'upstream-sync']}
       />
     ),
   },

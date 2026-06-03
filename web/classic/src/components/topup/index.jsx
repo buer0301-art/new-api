@@ -758,6 +758,14 @@ const TopUp = () => {
           if (defaultPayment) {
             setPayWay(defaultPayment);
           }
+          setTopupInfo((prev) => ({
+            ...prev,
+            enable_redemption: data.enable_redemption !== false,
+            payment_compliance_confirmed:
+              data.payment_compliance_confirmed !== false,
+            payment_compliance_terms_version:
+              data.payment_compliance_terms_version || '',
+          }));
 
           // 设置 Creem 产品
           try {

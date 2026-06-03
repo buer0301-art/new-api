@@ -19,6 +19,8 @@ import (
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/per_request_pricing"
+	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -108,7 +110,15 @@ func ResolveOriginTask(c *gin.Context, info *relaycommon.RelayInfo) *dto.TaskErr
 	// 提取 remix 参数（时长、分辨率 → OtherRatios）
 	if info.Action == constant.TaskActionRemix {
 		if originTask.PrivateData.BillingContext != nil {
-			// 新的 remix 逻辑：直接从原始任务的 BillingContext 中提取 OtherRatios（如果存在）
+			// 新的 remix 逻辑：直接从原始任务的 BillingContext 中提取计费上下文（如果存在）
+			if originTask.PrivateData.BillingContext.ResolvedPerRequestPricing != nil {
+				resolved := originTask.PrivateData.BillingContext.ResolvedPerRequestPricing
+				info.PriceData.ModelPrice = resolved.PriceUSD
+				info.PriceData.UsePrice = true
+				info.PriceData.Quota = resolved.Quota
+				info.PriceData.ResolvedPerRequestPricing = resolved
+				info.PriceData.OtherRatios = nil
+			}
 			for s, f := range originTask.PrivateData.BillingContext.OtherRatios {
 				info.PriceData.AddOtherRatio(s, f)
 			}
@@ -182,19 +192,32 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	if err != nil {
 		return nil, service.TaskErrorWrapper(err, "model_price_error", http.StatusBadRequest)
 	}
+	originResolved := info.PriceData.ResolvedPerRequestPricing
 	info.PriceData = priceData
+	if originResolved != nil {
+		info.PriceData = priceData
+		info.PriceData.ModelPrice = originResolved.PriceUSD
+		info.PriceData.UsePrice = true
+		info.PriceData.Quota = originResolved.Quota
+		info.PriceData.ResolvedPerRequestPricing = originResolved
+		info.PriceData.OtherRatios = nil
+	} else if _, taskErr := applyVideoPerRequestPricing(c, info, priceData); taskErr != nil {
+		return nil, taskErr
+	}
 
 	// 5. 计费估算：让适配器根据用户请求提供 OtherRatios（时长、分辨率等）
 	//    必须在 ModelPriceHelperPerCall 之后调用（它会重建 PriceData）。
 	//    ResolveOriginTask 可能已在 remix 路径中预设了 OtherRatios，此处合并。
-	if estimatedRatios := adaptor.EstimateBilling(c, info); len(estimatedRatios) > 0 {
-		for k, v := range estimatedRatios {
-			info.PriceData.AddOtherRatio(k, v)
+	if info.PriceData.ResolvedPerRequestPricing == nil {
+		if estimatedRatios := adaptor.EstimateBilling(c, info); len(estimatedRatios) > 0 {
+			for k, v := range estimatedRatios {
+				info.PriceData.AddOtherRatio(k, v)
+			}
 		}
 	}
 
 	// 6. 将 OtherRatios 应用到基础额度
-	if !common.StringsContains(constant.TaskPricePatches, modelName) {
+	if info.PriceData.ResolvedPerRequestPricing == nil && !common.StringsContains(constant.TaskPricePatches, modelName) {
 		for _, ra := range info.PriceData.OtherRatios {
 			if ra != 1.0 {
 				info.PriceData.Quota = int(float64(info.PriceData.Quota) * ra)
@@ -255,6 +278,81 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 		Platform:       platform,
 		Quota:          finalQuota,
 	}, nil
+}
+
+func applyVideoPerRequestPricing(c *gin.Context, info *relaycommon.RelayInfo, priceData types.PriceData) (bool, *dto.TaskError) {
+	if info.Action == constant.TaskActionRemix {
+		return false, nil
+	}
+	rule, ok := per_request_pricing.GetRule(info.OriginModelName)
+	if !ok || rule.MediaType != per_request_pricing.MediaTypeVideo {
+		return false, nil
+	}
+	req, err := relaycommon.GetTaskRequest(c)
+	if err != nil {
+		return false, service.TaskErrorWrapperLocal(err, "model_price_error", http.StatusBadRequest)
+	}
+	resolved, err := per_request_pricing.ResolveVideoPricing(
+		info.OriginModelName,
+		rule,
+		resolveVideoPricingInputFromTaskRequest(info.OriginModelName, req, priceData.GroupRatioInfo.GroupRatio),
+	)
+	if err != nil {
+		return false, service.TaskErrorWrapperLocal(err, "model_price_error", http.StatusBadRequest)
+	}
+	priceData.ModelPrice = resolved.PriceUSD
+	priceData.UsePrice = true
+	priceData.Quota = resolved.Quota
+	priceData.ResolvedPerRequestPricing = resolved
+	priceData.OtherRatios = nil
+	info.PriceData = priceData
+	return true, nil
+}
+
+func resolveVideoPricingInputFromTaskRequest(modelName string, req relaycommon.TaskSubmitReq, groupRatio float64) per_request_pricing.VideoPricingInput {
+	metadataResolution := metadataString(req.Metadata, "resolution")
+	duration := req.Duration
+	if strings.TrimSpace(req.Seconds) == "" && duration <= 0 {
+		duration = metadataPositiveInt(req.Metadata, "durationSeconds", "duration_seconds")
+	}
+	if strings.HasPrefix(modelName, "sora-2") && strings.TrimSpace(req.Seconds) == "" && duration <= 0 {
+		duration = 4
+	}
+	return per_request_pricing.VideoPricingInput{
+		Size:               req.Size,
+		MetadataResolution: metadataResolution,
+		Seconds:            req.Seconds,
+		Duration:           duration,
+		GroupRatio:         groupRatio,
+		QuotaPerUnit:       common.QuotaPerUnit,
+	}
+}
+
+func metadataString(metadata map[string]interface{}, key string) string {
+	if metadata == nil {
+		return ""
+	}
+	value, ok := metadata[key]
+	if !ok || value == nil {
+		return ""
+	}
+	return fmt.Sprint(value)
+}
+
+func metadataPositiveInt(metadata map[string]interface{}, keys ...string) int {
+	for _, key := range keys {
+		raw := strings.TrimSpace(metadataString(metadata, key))
+		if raw == "" {
+			continue
+		}
+		if value, err := strconv.Atoi(raw); err == nil && value > 0 {
+			return value
+		}
+		if value, err := strconv.ParseFloat(raw, 64); err == nil && value > 0 {
+			return int(value)
+		}
+	}
+	return 0
 }
 
 // recalcQuotaFromRatios 根据 adjustedRatios 重新计算 quota。

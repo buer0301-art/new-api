@@ -65,6 +65,13 @@ import {
   ModelPricingSheet,
   type ModelRatioData,
 } from './model-pricing-sheet'
+import {
+  PER_REQUEST_RULES_KEY,
+  stringifyPerRequestRules,
+  summarizePerRequestRule,
+  type PerRequestPriceRule,
+  type PerRequestRules,
+} from './per-request-pricing'
 
 type ModelRatioVisualEditorProps = {
   modelPrice: string
@@ -77,6 +84,7 @@ type ModelRatioVisualEditorProps = {
   audioCompletionRatio: string
   billingMode: string
   billingExpr: string
+  perRequestRules: string
   onChange: (field: string, value: string) => void
 }
 
@@ -92,6 +100,7 @@ type ModelRow = {
   audioCompletionRatio?: string
   billingMode?: string
   billingExpr?: string
+  perRequestRule?: PerRequestPriceRule
   requestRuleExpr?: string
   hasConflict: boolean
 }
@@ -150,6 +159,9 @@ const getPriceSummary = (row: ModelRow, t: (key: string) => string) => {
     return getExpressionSummary(row, t)
   }
   if (row.billingMode === 'per-request') {
+    if (row.perRequestRule) {
+      return summarizePerRequestRule(row.perRequestRule) || t('Unset price')
+    }
     return row.price ? `$${row.price} / ${t('request')}` : t('Unset price')
   }
 
@@ -207,6 +219,7 @@ export const ModelRatioVisualEditor = memo(
     audioCompletionRatio,
     billingMode,
     billingExpr,
+    perRequestRules,
     onChange,
   }: ModelRatioVisualEditorProps) {
     const { t } = useTranslation()
@@ -308,6 +321,13 @@ export const ModelRatioVisualEditor = memo(
           context: 'billing expression',
         }
       )
+      const perRequestRuleMap = safeJsonParse<PerRequestRules>(
+        perRequestRules,
+        {
+          fallback: {},
+          context: 'per-request rules',
+        }
+      )
 
       const modelNames = new Set([
         ...Object.keys(priceMap),
@@ -320,6 +340,7 @@ export const ModelRatioVisualEditor = memo(
         ...Object.keys(audioCompletionMap),
         ...Object.keys(billingModeMap),
         ...Object.keys(billingExprMap),
+        ...Object.keys(perRequestRuleMap),
       ])
 
       const modelData: ModelRow[] = Array.from(modelNames).map((name) => {
@@ -333,6 +354,7 @@ export const ModelRatioVisualEditor = memo(
         const audioCompletion = audioCompletionMap[name]?.toString() || ''
 
         const modeForModel = billingModeMap[name]
+        const perRequestRule = perRequestRuleMap[name]
         if (modeForModel === 'tiered_expr') {
           // Tiered_expr models may also retain ratio/price values as fallback
           // during multi-instance sync delays. We preserve them in the row so
@@ -345,6 +367,7 @@ export const ModelRatioVisualEditor = memo(
             billingMode: 'tiered_expr',
             billingExpr: pureExpr,
             requestRuleExpr,
+            perRequestRule,
             price,
             ratio,
             cacheRatio: cache,
@@ -359,6 +382,7 @@ export const ModelRatioVisualEditor = memo(
 
         return {
           name,
+          perRequestRule,
           price,
           ratio,
           cacheRatio: cache,
@@ -367,7 +391,8 @@ export const ModelRatioVisualEditor = memo(
           imageRatio: image,
           audioRatio: audio,
           audioCompletionRatio: audioCompletion,
-          billingMode: price !== '' ? 'per-request' : 'per-token',
+          billingMode:
+            perRequestRule || price !== '' ? 'per-request' : 'per-token',
           hasConflict:
             price !== '' &&
             (ratio !== '' ||
@@ -392,6 +417,7 @@ export const ModelRatioVisualEditor = memo(
       audioCompletionRatio,
       billingMode,
       billingExpr,
+      perRequestRules,
     ])
 
     const modeCounts = useMemo(
@@ -434,6 +460,7 @@ export const ModelRatioVisualEditor = memo(
                 ? 'per-request'
                 : 'per-token',
           billingExpr: model.billingExpr,
+          perRequestRule: model.perRequestRule,
           requestRuleExpr: model.requestRuleExpr,
         })
         setEditorOpen(true)
@@ -512,6 +539,10 @@ export const ModelRatioVisualEditor = memo(
           billingExpr,
           { fallback: {}, silent: true }
         )
+        const perRequestRuleMap = safeJsonParse<PerRequestRules>(
+          perRequestRules,
+          { fallback: {}, silent: true }
+        )
 
         delete priceMap[name]
         delete ratioMap[name]
@@ -523,6 +554,7 @@ export const ModelRatioVisualEditor = memo(
         delete audioCompletionMap[name]
         delete billingModeMap[name]
         delete billingExprMap[name]
+        delete perRequestRuleMap[name]
 
         onChange('ModelPrice', JSON.stringify(priceMap, null, 2))
         onChange('ModelRatio', JSON.stringify(ratioMap, null, 2))
@@ -543,6 +575,10 @@ export const ModelRatioVisualEditor = memo(
           'billing_setting.billing_expr',
           JSON.stringify(billingExprMap, null, 2)
         )
+        onChange(
+          PER_REQUEST_RULES_KEY,
+          stringifyPerRequestRules(perRequestRuleMap)
+        )
       },
       [
         modelPrice,
@@ -555,6 +591,7 @@ export const ModelRatioVisualEditor = memo(
         audioCompletionRatio,
         billingMode,
         billingExpr,
+        perRequestRules,
         onChange,
       ]
     )
@@ -747,6 +784,10 @@ export const ModelRatioVisualEditor = memo(
           billingExpr,
           { fallback: {}, silent: true }
         )
+        const perRequestRuleMap = safeJsonParse<PerRequestRules>(
+          perRequestRules,
+          { fallback: {}, silent: true }
+        )
 
         const setIfPresent = (
           target: Record<string, number>,
@@ -769,6 +810,7 @@ export const ModelRatioVisualEditor = memo(
           delete audioCompletionMap[name]
           delete billingModeMap[name]
           delete billingExprMap[name]
+          delete perRequestRuleMap[name]
 
           if (data.billingMode === 'tiered_expr') {
             const combined = combineBillingExpr(
@@ -802,6 +844,13 @@ export const ModelRatioVisualEditor = memo(
             setIfPresent(audioMap, name, data.audioRatio)
             setIfPresent(audioCompletionMap, name, data.audioCompletionRatio)
           }
+
+          if (data.perRequestRule) {
+            perRequestRuleMap[name] = data.perRequestRule
+            delete priceMap[name]
+          } else if (data.billingMode === 'per-request' && data.price) {
+            delete perRequestRuleMap[name]
+          }
         })
 
         onChange('ModelPrice', JSON.stringify(priceMap, null, 2))
@@ -823,6 +872,10 @@ export const ModelRatioVisualEditor = memo(
           'billing_setting.billing_expr',
           JSON.stringify(billingExprMap, null, 2)
         )
+        onChange(
+          PER_REQUEST_RULES_KEY,
+          stringifyPerRequestRules(perRequestRuleMap)
+        )
       },
       [
         modelPrice,
@@ -835,6 +888,7 @@ export const ModelRatioVisualEditor = memo(
         audioCompletionRatio,
         billingMode,
         billingExpr,
+        perRequestRules,
         onChange,
       ]
     )
@@ -1040,6 +1094,7 @@ export const ModelRatioVisualEditor = memo(
       prevProps.audioCompletionRatio === nextProps.audioCompletionRatio &&
       prevProps.billingMode === nextProps.billingMode &&
       prevProps.billingExpr === nextProps.billingExpr &&
+      prevProps.perRequestRules === nextProps.perRequestRules &&
       prevProps.onChange === nextProps.onChange
     )
   }

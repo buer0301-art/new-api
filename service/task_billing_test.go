@@ -11,6 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/types"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -182,6 +183,31 @@ func countLogs(t *testing.T) int64 {
 	var count int64
 	model.LOG_DB.Model(&model.Log{}).Count(&count)
 	return count
+}
+
+func TestTaskBillingOther_IncludesResolvedPerRequestPricing(t *testing.T) {
+	task := makeTask(1, 1, 1200000, 0, BillingSourceWallet, 0)
+	task.PrivateData.BillingContext.ResolvedPerRequestPricing = &types.ResolvedPerRequestPricing{
+		Mode:       "resolution",
+		MediaType:  "video",
+		Unit:       "second",
+		Resolution: "4K",
+		UnitPrice:  0.24,
+		Quantity:   10,
+		PriceUSD:   2.4,
+		Quota:      1200000,
+	}
+
+	other := taskBillingOther(task)
+
+	assert.Equal(t, "per_request_resolution", other["billing_mode"])
+	assert.Equal(t, "video", other["media_type"])
+	assert.Equal(t, "second", other["unit"])
+	assert.Equal(t, "4K", other["resolution"])
+	assert.Equal(t, 0.24, other["unit_price"])
+	assert.Equal(t, float64(10), other["quantity"])
+	assert.Equal(t, 2.4, other["price_usd"])
+	assert.Equal(t, 1200000, other["resolved_quota"])
 }
 
 // ===========================================================================

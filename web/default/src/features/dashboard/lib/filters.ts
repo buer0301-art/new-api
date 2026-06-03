@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import dayjs from '@/lib/dayjs'
 import { getRollingDateRange, type TimeGranularity } from '@/lib/time'
 import {
   DASHBOARD_CHART_PREFERENCES_STORAGE_KEY,
@@ -144,6 +145,25 @@ export function buildDefaultDashboardFilters(
   preferences: DashboardChartPreferences = getSavedChartPreferences()
 ): DashboardFilters {
   const { start, end } = getRollingDateRange(preferences.defaultTimeRangeDays)
+  return {
+    ...EMPTY_DASHBOARD_FILTERS,
+    start_timestamp: start,
+    end_timestamp: end,
+    time_granularity: preferences.defaultTimeGranularity,
+  }
+}
+
+export function buildTodayDashboardRange(): { start: Date; end: Date } {
+  return {
+    start: dayjs().startOf('day').toDate(),
+    end: dayjs().endOf('day').toDate(),
+  }
+}
+
+export function buildTodayDashboardFilters(
+  preferences: DashboardChartPreferences = getSavedChartPreferences()
+): DashboardFilters {
+  const { start, end } = buildTodayDashboardRange()
   return {
     ...EMPTY_DASHBOARD_FILTERS,
     start_timestamp: start,

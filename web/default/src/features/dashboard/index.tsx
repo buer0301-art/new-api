@@ -26,11 +26,14 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { SectionPageLayout } from '@/components/layout'
 import { FadeIn } from '@/components/page-transition'
 import { ModelsChartPreferences } from './components/models/models-chart-preferences'
+import { ModelsDateRangeFilter } from './components/models/models-date-range-filter'
 import { ModelsFilter } from './components/models/models-filter-dialog'
 import { OverviewDashboard } from './components/overview/overview-dashboard'
 import { DEFAULT_TIME_GRANULARITY } from './constants'
 import {
   buildDefaultDashboardFilters,
+  buildTodayDashboardFilters,
+  buildTodayDashboardRange,
   getSavedChartPreferences,
   saveChartPreferences,
 } from './lib'
@@ -161,15 +164,24 @@ export function Dashboard() {
   const [chartPreferences, setChartPreferences] =
     useState<DashboardChartPreferences>(() => getSavedChartPreferences())
   const [modelFilters, setModelFilters] = useState<DashboardFilters>(() =>
-    buildDefaultDashboardFilters(getSavedChartPreferences())
+    buildTodayDashboardFilters(getSavedChartPreferences())
   )
 
   const handleFilterChange = useCallback((filters: DashboardFilters) => {
-    setModelFilters(filters)
+    setModelFilters((prev) => ({
+      ...prev,
+      ...filters,
+      start_timestamp: prev.start_timestamp,
+      end_timestamp: prev.end_timestamp,
+    }))
   }, [])
 
   const handleResetFilters = useCallback(() => {
-    setModelFilters(buildDefaultDashboardFilters(chartPreferences))
+    setModelFilters((prev) => ({
+      ...buildDefaultDashboardFilters(chartPreferences),
+      start_timestamp: prev.start_timestamp,
+      end_timestamp: prev.end_timestamp,
+    }))
   }, [chartPreferences])
 
   const handleDataUpdate = useCallback(
@@ -183,11 +195,35 @@ export function Dashboard() {
   const handleChartPreferencesChange = useCallback(
     (preferences: DashboardChartPreferences) => {
       setChartPreferences(preferences)
-      setModelFilters(buildDefaultDashboardFilters(preferences))
+      setModelFilters((prev) => ({
+        ...buildDefaultDashboardFilters(preferences),
+        start_timestamp: prev.start_timestamp,
+        end_timestamp: prev.end_timestamp,
+      }))
       saveChartPreferences(preferences)
     },
     []
   )
+
+  const handleDateRangeChange = useCallback(
+    (range: { start?: Date; end?: Date }) => {
+      setModelFilters((prev) => ({
+        ...prev,
+        start_timestamp: range.start,
+        end_timestamp: range.end,
+      }))
+    },
+    []
+  )
+
+  const handleResetDateRangeToday = useCallback(() => {
+    const { start, end } = buildTodayDashboardRange()
+    setModelFilters((prev) => ({
+      ...prev,
+      start_timestamp: start,
+      end_timestamp: end,
+    }))
+  }, [])
 
   const meta = SECTION_META[activeSection] ?? SECTION_META.overview
   const isAdmin = Boolean(userRole && userRole >= ROLE.ADMIN)
@@ -212,6 +248,14 @@ export function Dashboard() {
   const modelActions =
     activeSection === 'models' ? (
       <>
+        {isAdmin && (
+          <ModelsDateRangeFilter
+            start={modelFilters.start_timestamp}
+            end={modelFilters.end_timestamp}
+            onChange={handleDateRangeChange}
+            onResetToday={handleResetDateRangeToday}
+          />
+        )}
         <ModelsChartPreferences
           preferences={chartPreferences}
           onPreferencesChange={handleChartPreferencesChange}
@@ -268,7 +312,7 @@ export function Dashboard() {
               {isAdmin && (
                 <FadeIn delay={0.05}>
                   <Suspense fallback={<PerformanceOverviewFallback />}>
-                    <LazyPerformanceOverview />
+                    <LazyPerformanceOverview filters={modelFilters} />
                   </Suspense>
                 </FadeIn>
               )}

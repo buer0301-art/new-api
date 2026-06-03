@@ -19,23 +19,37 @@ For commercial licensing, please contact support@quantumnous.com
 import { api } from '@/lib/api'
 import type { PerformanceMetricsData, PerfSummaryAllData } from './types'
 
+type PerfMetricsTimeParams =
+  | number
+  | {
+      start_timestamp: number
+      end_timestamp: number
+    }
+
+function buildPerfMetricsTimeParams(params: PerfMetricsTimeParams = 24) {
+  if (typeof params === 'number') {
+    return { hours: params }
+  }
+  return params
+}
+
 export async function getPerfMetricsSummary(
-  hours = 24
+  params: PerfMetricsTimeParams = 24
 ): Promise<PerfSummaryAllData> {
   const res = await api.get<PerfSummaryAllData>('/api/perf-metrics/summary', {
-    params: { hours },
+    params: buildPerfMetricsTimeParams(params),
   })
   return res.data
 }
 
 export async function getPerfMetrics(
   modelName: string,
-  hours = 24
+  params: PerfMetricsTimeParams = 24
 ): Promise<PerformanceMetricsData> {
   const res = await api.get<PerformanceMetricsData>('/api/perf-metrics', {
     params: {
       model: modelName,
-      hours,
+      ...buildPerfMetricsTimeParams(params),
     },
   })
   return res.data

@@ -30,6 +30,7 @@ import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
 import { GroupRatioForm } from './group-ratio-form'
 import { ModelRatioForm } from './model-ratio-form'
+import { PER_REQUEST_RULES_KEY } from './per-request-pricing'
 import { ToolPriceSettings } from './tool-price-settings'
 import { UpstreamRatioSync } from './upstream-ratio-sync'
 import {
@@ -122,6 +123,15 @@ const modelSchema = z.object({
     }
   }),
   BillingExpr: z.string().superRefine((value, ctx) => {
+    const result = validateJsonString(value)
+    if (!result.valid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: result.message || 'Invalid JSON',
+      })
+    }
+  }),
+  PerRequestRules: z.string().superRefine((value, ctx) => {
     const result = validateJsonString(value)
     if (!result.valid) {
       ctx.addIssue({
@@ -251,6 +261,7 @@ export function RatioSettingsCard({
     ExposeRatioEnabled: modelDefaults.ExposeRatioEnabled,
     BillingMode: normalizeJsonString(modelDefaults.BillingMode),
     BillingExpr: normalizeJsonString(modelDefaults.BillingExpr),
+    PerRequestRules: normalizeJsonString(modelDefaults.PerRequestRules),
   })
 
   const groupNormalizedDefaults = useRef({
@@ -282,6 +293,7 @@ export function RatioSettingsCard({
       ),
       BillingMode: formatJsonForTextarea(modelDefaults.BillingMode),
       BillingExpr: formatJsonForTextarea(modelDefaults.BillingExpr),
+      PerRequestRules: formatJsonForTextarea(modelDefaults.PerRequestRules),
     },
   })
 
@@ -316,6 +328,7 @@ export function RatioSettingsCard({
       ExposeRatioEnabled: modelDefaults.ExposeRatioEnabled,
       BillingMode: normalizeJsonString(modelDefaults.BillingMode),
       BillingExpr: normalizeJsonString(modelDefaults.BillingExpr),
+      PerRequestRules: normalizeJsonString(modelDefaults.PerRequestRules),
     }
 
     modelForm.reset({
@@ -332,6 +345,7 @@ export function RatioSettingsCard({
       ),
       BillingMode: formatJsonForTextarea(modelDefaults.BillingMode),
       BillingExpr: formatJsonForTextarea(modelDefaults.BillingExpr),
+      PerRequestRules: formatJsonForTextarea(modelDefaults.PerRequestRules),
     })
   }, [modelDefaults, modelForm])
 
@@ -375,11 +389,13 @@ export function RatioSettingsCard({
         ExposeRatioEnabled: values.ExposeRatioEnabled,
         BillingMode: normalizeJsonString(values.BillingMode),
         BillingExpr: normalizeJsonString(values.BillingExpr),
+        PerRequestRules: normalizeJsonString(values.PerRequestRules),
       }
 
       const apiKeyMap: Record<string, string> = {
         BillingMode: 'billing_setting.billing_mode',
         BillingExpr: 'billing_setting.billing_expr',
+        PerRequestRules: PER_REQUEST_RULES_KEY,
       }
 
       const updates = (

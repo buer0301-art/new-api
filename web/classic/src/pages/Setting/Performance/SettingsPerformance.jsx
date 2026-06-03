@@ -23,6 +23,7 @@ import {
   Button,
   Col,
   Form,
+  Input,
   InputNumber,
   Row,
   Spin,
@@ -79,6 +80,11 @@ export default function SettingsPerformance(props) {
   const [logCleanupMode, setLogCleanupMode] = useState('by_count');
   const [logCleanupValue, setLogCleanupValue] = useState(10);
   const [logCleanupLoading, setLogCleanupLoading] = useState(false);
+  const [serverLogRequestId, setServerLogRequestId] = useState('');
+  const [serverLogKeyword, setServerLogKeyword] = useState('');
+  const [serverLogEntries, setServerLogEntries] = useState([]);
+  const [serverLogSearchLoading, setServerLogSearchLoading] = useState(false);
+  const [serverLogSearchTouched, setServerLogSearchTouched] = useState(false);
 
   function handleFieldChange(fieldName) {
     return (value) => {
@@ -211,6 +217,34 @@ export default function SettingsPerformance(props) {
       showError(t('清理失败'));
     } finally {
       setLogCleanupLoading(false);
+    }
+  }
+
+  async function searchServerLogs() {
+    const requestId = serverLogRequestId.trim();
+    const keyword = serverLogKeyword.trim();
+    if (!requestId && !keyword) {
+      showWarning(t('请输入请求 ID 或关键词后再查询'));
+      return;
+    }
+
+    setServerLogSearchLoading(true);
+    setServerLogSearchTouched(true);
+    try {
+      const res = await API.get('/api/performance/logs/search', {
+        params: {
+          ...(requestId ? { request_id: requestId } : {}),
+          ...(keyword ? { keyword } : {}),
+        },
+      });
+      if (!res.data.success) {
+        throw new Error(res.data.message || t('检索服务器日志失败'));
+      }
+      setServerLogEntries(res.data.data?.entries || []);
+    } catch (error) {
+      showError(error?.message || t('检索服务器日志失败'));
+    } finally {
+      setServerLogSearchLoading(false);
     }
   }
 
@@ -431,6 +465,129 @@ export default function SettingsPerformance(props) {
               ]}
               style={{ marginBottom: 16 }}
             />
+            <div
+              style={{
+                border: '1px solid var(--semi-color-border)',
+                borderRadius: 8,
+                padding: 16,
+                marginBottom: 16,
+              }}
+            >
+              <Text strong style={{ display: 'block', marginBottom: 4 }}>
+                {t('运行日志检索')}
+              </Text>
+              <Text
+                type='tertiary'
+                style={{ display: 'block', marginBottom: 16 }}
+              >
+                {t(
+                  '通过请求 ID 或多个关键词检索当前保留的服务器日志文件，用于排查失败请求。',
+                )}
+              </Text>
+
+              <Row gutter={12} style={{ marginBottom: 12 }}>
+                <Col xs={24} sm={10} md={9}>
+                  <Input
+                    value={serverLogRequestId}
+                    onChange={setServerLogRequestId}
+                    onEnterPress={searchServerLogs}
+                    placeholder={t('请求 ID')}
+                  />
+                </Col>
+                <Col xs={24} sm={10} md={9}>
+                  <Input
+                    value={serverLogKeyword}
+                    onChange={setServerLogKeyword}
+                    onEnterPress={searchServerLogs}
+                    placeholder={t('多个关键词，用空格或逗号分隔')}
+                  />
+                </Col>
+                <Col xs={24} sm={4} md={6}>
+                  <Button
+                    loading={serverLogSearchLoading}
+                    onClick={searchServerLogs}
+                    style={{ width: '100%' }}
+                  >
+                    {serverLogSearchLoading
+                      ? t('查询中...')
+                      : t('检索服务器日志')}
+                  </Button>
+                </Col>
+              </Row>
+
+              <Text
+                type='tertiary'
+                size='small'
+                style={{ display: 'block', marginBottom: 12 }}
+              >
+                {t('仅可检索当前仍保留的日志文件。')}
+              </Text>
+
+              {serverLogSearchTouched && (
+                <>
+                  <Text strong style={{ display: 'block', marginBottom: 12 }}>
+                    {serverLogEntries.length > 0
+                      ? t('找到 {{count}} 条匹配的服务器日志。', {
+                          count: serverLogEntries.length,
+                        })
+                      : t('未找到匹配的服务器日志。')}
+                  </Text>
+
+                  {serverLogEntries.length > 0 && (
+                    <div
+                      style={{
+                        maxHeight: 360,
+                        overflowY: 'auto',
+                        background: 'var(--semi-color-fill-0)',
+                        borderRadius: 8,
+                        padding: 12,
+                      }}
+                    >
+                      {serverLogEntries.map((entry, index) => (
+                        <div
+                          key={`${entry.file_name}-${entry.timestamp}-${index}`}
+                          style={{
+                            background: 'var(--semi-color-bg-0)',
+                            border: '1px solid var(--semi-color-border)',
+                            borderRadius: 8,
+                            padding: 12,
+                            marginBottom:
+                              index === serverLogEntries.length - 1 ? 0 : 8,
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              gap: 8,
+                              flexWrap: 'wrap',
+                              marginBottom: 8,
+                            }}
+                          >
+                            {entry.level && <Tag>{entry.level}</Tag>}
+                            {entry.timestamp && (
+                              <Text type='tertiary'>{entry.timestamp}</Text>
+                            )}
+                            {entry.request_id && (
+                              <Text code>{entry.request_id}</Text>
+                            )}
+                            <Text type='tertiary'>{entry.file_name}</Text>
+                          </div>
+                          <pre
+                            style={{
+                              margin: 0,
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word',
+                            }}
+                          >
+                            {entry.message || entry.raw_line}
+                          </pre>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
             <Row gutter={16} style={{ marginBottom: 16 }}>
               <Col xs={24} sm={12} md={8}>
                 <div style={{ marginBottom: 12 }}>

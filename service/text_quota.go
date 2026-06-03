@@ -227,6 +227,11 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 
 	ratio := dModelRatio.Mul(dGroupRatio)
 	summary.ToolCallSurchargeQuota = calculateTextToolCallSurcharge(ctx, relayInfo, &summary)
+	if resolved := relayInfo.PriceData.ResolvedPerRequestPricing; resolved != nil {
+		summary.ModelPrice = resolved.PriceUSD
+		summary.Quota = resolved.Quota
+		return summary
+	}
 
 	var audioInputQuota decimal.Decimal
 	if !relayInfo.PriceData.UsePrice {

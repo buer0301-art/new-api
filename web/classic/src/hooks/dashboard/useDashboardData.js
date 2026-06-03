@@ -20,8 +20,15 @@ For commercial licensing, please contact support@quantumnous.com
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { API, isAdmin, showError, timestamp2string } from '../../helpers';
-import { getDefaultTime, getInitialTimestamp } from '../../helpers/dashboard';
+import {
+  API,
+  getTodayEndTimestamp,
+  getTodayStartTimestamp,
+  isAdmin,
+  showError,
+  timestamp2string,
+} from '../../helpers';
+import { getDefaultTime } from '../../helpers/dashboard';
 import { TIME_OPTIONS } from '../../constants/dashboard.constants';
 import { useIsMobile } from '../common/useIsMobile';
 import { useMinimumLoadingTime } from '../common/useMinimumLoadingTime';
@@ -43,8 +50,8 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     username: '',
     token_name: '',
     model_name: '',
-    start_timestamp: getInitialTimestamp(),
-    end_timestamp: timestamp2string(new Date().getTime() / 1000 + 3600),
+    start_timestamp: timestamp2string(getTodayStartTimestamp()),
+    end_timestamp: timestamp2string(getTodayEndTimestamp()),
     channel: '',
     data_export_default_time: '',
   });
@@ -145,6 +152,19 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
       return;
     }
     setInputs((inputs) => ({ ...inputs, [name]: value }));
+  }, []);
+
+  const handleDateRangeChange = useCallback((dateRange) => {
+    if (!Array.isArray(dateRange) || dateRange.length !== 2) {
+      return;
+    }
+
+    const [startTimestamp, endTimestamp] = dateRange;
+    setInputs((inputs) => ({
+      ...inputs,
+      start_timestamp: startTimestamp,
+      end_timestamp: endTimestamp,
+    }));
   }, []);
 
   const showSearchModal = useCallback(() => {
@@ -329,6 +349,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
 
     // 函数
     handleInputChange,
+    handleDateRangeChange,
     showSearchModal,
     handleCloseModal,
     loadQuotaData,

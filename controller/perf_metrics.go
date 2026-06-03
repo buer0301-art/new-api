@@ -10,15 +10,41 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func GetPerfMetricsSummary(c *gin.Context) {
+func parsePerfMetricsRange(c *gin.Context) (startTs int64, endTs int64, ok bool) {
+	startRaw := c.Query("start_timestamp")
+	endRaw := c.Query("end_timestamp")
+	if startRaw == "" || endRaw == "" {
+		return 0, 0, false
+	}
+	startTs, startErr := strconv.ParseInt(startRaw, 10, 64)
+	endTs, endErr := strconv.ParseInt(endRaw, 10, 64)
+	if startErr != nil || endErr != nil || startTs <= 0 || endTs <= 0 {
+		return 0, 0, false
+	}
+	if endTs < startTs {
+		startTs, endTs = endTs, startTs
+	}
+	return startTs, endTs, true
+}
+
+func parsePerfMetricsHours(c *gin.Context) int {
 	hours := 24
 	if rawHours := c.Query("hours"); rawHours != "" {
 		if parsed, err := strconv.Atoi(rawHours); err == nil {
 			hours = parsed
 		}
 	}
+	return hours
+}
 
-	result, err := perfmetrics.QuerySummaryAll(hours)
+func GetPerfMetricsSummary(c *gin.Context) {
+	var result perfmetrics.SummaryAllResult
+	var err error
+	if startTs, endTs, ok := parsePerfMetricsRange(c); ok {
+		result, err = perfmetrics.QuerySummaryAllRange(startTs, endTs)
+	} else {
+		result, err = perfmetrics.QuerySummaryAll(parsePerfMetricsHours(c))
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -43,18 +69,19 @@ func GetPerfMetrics(c *gin.Context) {
 		return
 	}
 
-	hours := 24
-	if rawHours := c.Query("hours"); rawHours != "" {
-		if parsed, err := strconv.Atoi(rawHours); err == nil {
-			hours = parsed
-		}
-	}
+	startTs, endTs, hasRange := parsePerfMetricsRange(c)
 
-	result, err := perfmetrics.Query(perfmetrics.QueryParams{
+	params := perfmetrics.QueryParams{
 		Model: modelName,
 		Group: c.Query("group"),
-		Hours: hours,
-	})
+		Hours: parsePerfMetricsHours(c),
+	}
+	if hasRange {
+		params.StartTs = startTs
+		params.EndTs = endTs
+	}
+
+	result, err := perfmetrics.Query(params)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,

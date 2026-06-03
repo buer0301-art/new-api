@@ -37,6 +37,7 @@ const getModelDefaults = (settings: BillingSettings) => ({
   ExposeRatioEnabled: settings.ExposeRatioEnabled,
   BillingMode: settings['billing_setting.billing_mode'],
   BillingExpr: settings['billing_setting.billing_expr'],
+  PerRequestRules: settings['per_request_pricing.rules'],
 })
 
 const getGroupDefaults = (settings: BillingSettings) => ({
@@ -71,6 +72,10 @@ const BILLING_SECTIONS = [
               settings['quota_setting.enable_free_model_pre_consume'],
           },
         }}
+        complianceConfirmed={
+          (settings['payment_setting.compliance_confirmed'] ?? false) &&
+          settings['payment_setting.compliance_terms_version'] === 'v1'
+        }
       />
     ),
   },
@@ -157,9 +162,7 @@ const BILLING_SECTIONS = [
           Web3PayEnabled: settings.Web3PayEnabled,
           Web3PayGatewayAPIBase: settings.Web3PayGatewayAPIBase,
           Web3PayCheckoutMode:
-            settings.Web3PayCheckoutMode === 'redirect'
-              ? 'redirect'
-              : 'inline',
+            settings.Web3PayCheckoutMode === 'redirect' ? 'redirect' : 'inline',
           Web3PayAppKey: settings.Web3PayAppKey,
           Web3PayApiSecret: settings.Web3PayApiSecret,
           Web3PayUnitPrice: settings.Web3PayUnitPrice,
@@ -196,6 +199,13 @@ const BILLING_SECTIONS = [
           WaffoPancakeCurrency: settings.WaffoPancakeCurrency ?? 'USD',
           WaffoPancakeUnitPrice: settings.WaffoPancakeUnitPrice ?? 1,
           WaffoPancakeMinTopUp: settings.WaffoPancakeMinTopUp ?? 1,
+        }}
+        complianceDefaults={{
+          confirmed: settings['payment_setting.compliance_confirmed'] ?? false,
+          termsVersion:
+            settings['payment_setting.compliance_terms_version'] ?? '',
+          confirmedAt: settings['payment_setting.compliance_confirmed_at'] ?? 0,
+          confirmedBy: settings['payment_setting.compliance_confirmed_by'] ?? 0,
         }}
       />
     ),
