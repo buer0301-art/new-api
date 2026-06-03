@@ -17,11 +17,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useState } from 'react'
-import { Filter, RotateCcw, Calendar, Search } from 'lucide-react'
+import { Filter, RotateCcw, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth-store'
-import { getRollingDateRange, type TimeGranularity } from '@/lib/time'
-import { cn } from '@/lib/utils'
+import type { TimeGranularity } from '@/lib/time'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -43,11 +42,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { DateTimePicker } from '@/components/datetime-picker'
-import {
-  TIME_GRANULARITY_OPTIONS,
-  TIME_RANGE_PRESETS,
-} from '@/features/dashboard/constants'
+import { TIME_GRANULARITY_OPTIONS } from '@/features/dashboard/constants'
 import {
   buildDefaultDashboardFilters,
   cleanFilters,
@@ -87,13 +82,9 @@ export function ModelsFilter(props: ModelsFilterProps) {
   const [filters, setFilters] = useState<DashboardFilters>(() =>
     buildDefaultDashboardFilters(props.preferences)
   )
-  const [selectedRange, setSelectedRange] = useState<number | null>(
-    () => props.preferences.defaultTimeRangeDays
-  )
 
   const resetFiltersFromPreferences = () => {
     setFilters(buildDefaultDashboardFilters(props.preferences))
-    setSelectedRange(props.preferences.defaultTimeRangeDays)
   }
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -111,14 +102,7 @@ export function ModelsFilter(props: ModelsFilterProps) {
   }
 
   const handleReset = () => {
-    const days = props.preferences.defaultTimeRangeDays
-    const { start, end } = getRollingDateRange(days)
-    setFilters({
-      ...buildDefaultDashboardFilters(props.preferences),
-      start_timestamp: start,
-      end_timestamp: end,
-    })
-    setSelectedRange(days)
+    setFilters(buildDefaultDashboardFilters(props.preferences))
     props.onReset()
     setOpen(false)
   }
@@ -128,19 +112,6 @@ export function ModelsFilter(props: ModelsFilterProps) {
     value: Date | string | undefined
   ) => {
     setFilters((prev) => ({ ...prev, [field]: value }))
-    if (field === 'start_timestamp' || field === 'end_timestamp')
-      setSelectedRange(null)
-  }
-
-  const handleQuickRange = (days: number) => {
-    const { start, end } = getRollingDateRange(days)
-
-    setFilters((prev) => ({
-      ...prev,
-      start_timestamp: start,
-      end_timestamp: end,
-    }))
-    setSelectedRange(days)
   }
 
   return (
@@ -161,61 +132,6 @@ export function ModelsFilter(props: ModelsFilterProps) {
 
         <ScrollArea className='flex-1 pr-3 sm:pr-4'>
           <div className='grid gap-3 py-3 sm:gap-4 sm:py-4'>
-            {/* Quick time range selection */}
-            <div className='grid gap-2'>
-              <Label className='flex items-center gap-2'>
-                <Calendar className='h-4 w-4' />
-                {t('Quick Range')}
-              </Label>
-              <div className='grid grid-cols-2 gap-2 sm:flex'>
-                {TIME_RANGE_PRESETS.map((range) => (
-                  <Button
-                    key={range.days}
-                    type='button'
-                    size='sm'
-                    variant={
-                      selectedRange === range.days ? 'default' : 'outline'
-                    }
-                    onClick={() => handleQuickRange(range.days)}
-                    className={cn(
-                      'flex-1',
-                      selectedRange === range.days &&
-                        'ring-ring ring-2 ring-offset-2'
-                    )}
-                  >
-                    {t(range.label)}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            <SectionDivider label={t('Custom Time Range')} />
-
-            {/* Custom time range */}
-            <div className='grid gap-3 sm:gap-4'>
-              <div className='grid gap-2'>
-                <Label htmlFor='start_timestamp'>{t('Start Time')}</Label>
-                <DateTimePicker
-                  value={filters.start_timestamp}
-                  onChange={(date) =>
-                    handleChange('start_timestamp', date || undefined)
-                  }
-                  placeholder={t('Select start time')}
-                />
-              </div>
-
-              <div className='grid gap-2'>
-                <Label htmlFor='end_timestamp'>{t('End Time')}</Label>
-                <DateTimePicker
-                  value={filters.end_timestamp}
-                  onChange={(date) =>
-                    handleChange('end_timestamp', date || undefined)
-                  }
-                  placeholder={t('Select end time')}
-                />
-              </div>
-            </div>
-
             <SectionDivider label={t('Chart Settings')} />
 
             <div className='grid gap-2'>

@@ -77,14 +77,7 @@ func Record(sample Sample) {
 }
 
 func Query(params QueryParams) (QueryResult, error) {
-	if params.Hours <= 0 {
-		params.Hours = 24
-	}
-	if params.Hours > 24*30 {
-		params.Hours = 24 * 30
-	}
-	endTs := time.Now().Unix()
-	startTs := endTs - int64(params.Hours)*3600
+	startTs, endTs := queryRange(params.StartTs, params.EndTs, params.Hours)
 
 	merged := map[bucketKey]counters{}
 	rows, err := model.GetPerfMetrics(params.Model, params.Group, startTs, endTs)
@@ -123,14 +116,12 @@ func Query(params QueryParams) (QueryResult, error) {
 }
 
 func QuerySummaryAll(hours int) (SummaryAllResult, error) {
-	if hours <= 0 {
-		hours = 24
-	}
-	if hours > 24*30 {
-		hours = 24 * 30
-	}
-	endTs := time.Now().Unix()
-	startTs := endTs - int64(hours)*3600
+	startTs, endTs := queryRange(0, 0, hours)
+	return QuerySummaryAllRange(startTs, endTs)
+}
+
+func QuerySummaryAllRange(startTs int64, endTs int64) (SummaryAllResult, error) {
+	startTs, endTs = queryRange(startTs, endTs, 24)
 
 	rows, err := model.GetPerfMetricsSummaryAll(startTs, endTs)
 	if err != nil {
@@ -191,6 +182,23 @@ func QuerySummaryAll(hours int) (SummaryAllResult, error) {
 	})
 
 	return SummaryAllResult{Models: models}, nil
+}
+
+func queryRange(startTs int64, endTs int64, hours int) (int64, int64) {
+	if startTs > 0 && endTs > 0 {
+		if endTs < startTs {
+			return endTs, startTs
+		}
+		return startTs, endTs
+	}
+	if hours <= 0 {
+		hours = 24
+	}
+	if hours > 24*30 {
+		hours = 24 * 30
+	}
+	calculatedEndTs := time.Now().Unix()
+	return calculatedEndTs - int64(hours)*3600, calculatedEndTs
 }
 
 func bucketStart(ts int64) int64 {

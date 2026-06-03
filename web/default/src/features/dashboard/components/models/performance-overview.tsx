@@ -20,6 +20,7 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Gauge, HeartPulse, Timer } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { computeTimeRange } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getPerfMetricsSummary } from '@/features/performance-metrics/api'
@@ -29,8 +30,8 @@ import {
   formatUptimePct,
 } from '@/features/performance-metrics/lib/format'
 import type { PerfModelSummary } from '@/features/performance-metrics/types'
+import type { DashboardFilters } from '../../types'
 
-const PERFORMANCE_WINDOW_HOURS = 24
 const TOP_MODEL_LIMIT = 5
 
 type WeightedMetric = 'avg_latency_ms' | 'avg_tps' | 'success_rate'
@@ -93,11 +94,24 @@ function successDotClassName(successRate: number): string {
   return 'bg-destructive'
 }
 
-export function PerformanceOverview() {
+interface PerformanceOverviewProps {
+  filters?: DashboardFilters
+}
+
+export function PerformanceOverview(props: PerformanceOverviewProps) {
   const { t } = useTranslation()
+  const timeRange = computeTimeRange(
+    1,
+    props.filters?.start_timestamp,
+    props.filters?.end_timestamp
+  )
   const metricsQuery = useQuery({
-    queryKey: ['perf-metrics-summary', PERFORMANCE_WINDOW_HOURS],
-    queryFn: () => getPerfMetricsSummary(PERFORMANCE_WINDOW_HOURS),
+    queryKey: [
+      'perf-metrics-summary',
+      timeRange.start_timestamp,
+      timeRange.end_timestamp,
+    ],
+    queryFn: () => getPerfMetricsSummary(timeRange),
     staleTime: 60 * 1000,
     retry: false,
   })
