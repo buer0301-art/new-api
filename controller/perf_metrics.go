@@ -8,6 +8,7 @@ import (
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
+	"github.com/samber/lo"
 )
 
 func parsePerfMetricsRange(c *gin.Context) (startTs int64, endTs int64, ok bool) {
@@ -38,12 +39,13 @@ func parsePerfMetricsHours(c *gin.Context) int {
 }
 
 func GetPerfMetricsSummary(c *gin.Context) {
+	activeGroups := append(lo.Keys(ratio_setting.GetGroupRatioCopy()), "auto")
 	var result perfmetrics.SummaryAllResult
 	var err error
 	if startTs, endTs, ok := parsePerfMetricsRange(c); ok {
-		result, err = perfmetrics.QuerySummaryAllRange(startTs, endTs)
+		result, err = perfmetrics.QuerySummaryAllRange(startTs, endTs, activeGroups)
 	} else {
-		result, err = perfmetrics.QuerySummaryAll(parsePerfMetricsHours(c))
+		result, err = perfmetrics.QuerySummaryAll(parsePerfMetricsHours(c), activeGroups)
 	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -99,12 +101,9 @@ func GetPerfMetrics(c *gin.Context) {
 }
 
 func filterActiveGroups(groups []perfmetrics.GroupResult) []perfmetrics.GroupResult {
-	activeGroups := ratio_setting.GetGroupRatioCopy()
-	filtered := make([]perfmetrics.GroupResult, 0, len(groups))
-	for _, g := range groups {
-		if _, ok := activeGroups[g.Group]; ok || g.Group == "auto" {
-			filtered = append(filtered, g)
-		}
-	}
-	return filtered
+	activeRatios := ratio_setting.GetGroupRatioCopy()
+	return lo.Filter(groups, func(g perfmetrics.GroupResult, _ int) bool {
+		_, ok := activeRatios[g.Group]
+		return ok || g.Group == "auto"
+	})
 }

@@ -186,17 +186,6 @@ const PaymentSetting = () => {
           case 'WaffoPancakeMinTopUp':
             newInputs[item.key] = parseFloat(item.value);
             break;
-          case 'WaffoPancakeMerchantID':
-          case 'WaffoPancakePrivateKey':
-          case 'WaffoPancakeStoreID':
-          case 'WaffoPancakeProductID':
-          case 'WaffoPancakeReturnURL':
-          case 'WaffoPancakeCurrency':
-            newInputs[item.key] = item.value;
-            break;
-          case 'WaffoPancakeSandbox':
-            newInputs[item.key] = toBoolean(item.value);
-            break;
           default:
             if (item.key.endsWith('Enabled')) {
               newInputs[item.key] = toBoolean(item.value);
@@ -345,13 +334,13 @@ const PaymentSetting = () => {
                   hideSectionTitle
                 />
               </Tabs.TabPane>
-              {/*<Tabs.TabPane tab={t('Waffo Pancake 设置')} itemKey='waffo-pancake'>*/}
-              {/*  <SettingsPaymentGatewayWaffoPancake*/}
-              {/*    options={inputs}*/}
-              {/*    refresh={onRefresh}*/}
-              {/*    hideSectionTitle*/}
-              {/*  />*/}
-              {/*</Tabs.TabPane>*/}
+              <Tabs.TabPane tab={t('Waffo Pancake 设置')} itemKey='waffo-pancake'>
+                <SettingsPaymentGatewayWaffoPancake
+                  options={inputs}
+                  refresh={onRefresh}
+                  hideSectionTitle
+                />
+              </Tabs.TabPane>
             </Tabs>
           </div>
         </Card>

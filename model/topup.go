@@ -30,6 +30,7 @@ const (
 	PaymentMethodWaffo        = "waffo"
 	PaymentMethodWaffoPancake = "waffo_pancake"
 	PaymentMethodWeb3Pay      = "web3_pay"
+	PaymentMethodBalance      = "balance"
 )
 
 const (
@@ -39,6 +40,7 @@ const (
 	PaymentProviderWaffo        = "waffo"
 	PaymentProviderWaffoPancake = "waffo_pancake"
 	PaymentProviderWeb3Pay      = "web3_pay"
+	PaymentProviderBalance      = "balance"
 )
 
 var (
