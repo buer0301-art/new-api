@@ -167,13 +167,30 @@ export function formatLogQuota(quota: number): string {
 }
 
 /**
+ * Format token totals using M/B units for large values.
+ */
+export function formatTokenCount(value: number | null | undefined): string {
+  const tokens = Number(value)
+  if (!Number.isFinite(tokens)) return '0'
+  const absTokens = Math.abs(tokens)
+  const sign = tokens < 0 ? '-' : ''
+
+  if (absTokens >= 1_000_000_000) {
+    return `${sign}${(absTokens / 1_000_000_000).toFixed(2)}B`
+  }
+  if (absTokens >= 1_000_000) {
+    return `${sign}${(absTokens / 1_000_000).toFixed(2)}M`
+  }
+
+  return `${sign}${Math.round(absTokens).toLocaleString()}`
+}
+
+/**
  * Format tokens count with K/M suffixes
  */
 export function formatTokens(tokens: number): string {
   if (tokens === 0) return '-'
-  if (tokens < 1000) return tokens.toString()
-  if (tokens < 1000000) return `${(tokens / 1000).toFixed(1)}K`
-  return `${(tokens / 1000000).toFixed(2)}M`
+  return formatTokenCount(tokens)
 }
 
 /**

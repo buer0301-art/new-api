@@ -30,6 +30,7 @@ import {
   copy,
   showSuccess,
 } from './utils';
+import { getDashboardDefaultDateRangeStrings } from './dashboard-date-range';
 import {
   STORAGE_KEYS,
   DEFAULT_TIME_INTERVALS,
@@ -49,17 +50,7 @@ export const getTimeInterval = (timeType, isSeconds = false) => {
 };
 
 export const getInitialTimestamp = () => {
-  const defaultTime = getDefaultTime();
-  const now = new Date().getTime() / 1000;
-
-  switch (defaultTime) {
-    case 'hour':
-      return timestamp2string(now - 86400);
-    case 'week':
-      return timestamp2string(now - 86400 * 30);
-    default:
-      return timestamp2string(now - 86400 * 7);
-  }
+  return getDashboardDefaultDateRangeStrings().start_timestamp;
 };
 
 // ========== 数据处理工具函数 ==========

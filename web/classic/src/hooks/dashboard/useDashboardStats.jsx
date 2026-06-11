@@ -31,6 +31,7 @@ import {
 } from '@douyinfe/semi-icons';
 import { renderQuota } from '../../helpers';
 import { createSectionTitle } from '../../helpers/dashboard';
+import { formatTokenCount } from '../../helpers/token-format';
 
 export const useDashboardStats = (
   userState,
@@ -102,7 +103,7 @@ export const useDashboardStats = (
           },
           {
             title: t('统计Tokens'),
-            value: isNaN(consumeTokens) ? 0 : consumeTokens.toLocaleString(),
+            value: formatTokenCount(consumeTokens),
             icon: <IconTextStroked />,
             avatarColor: 'pink',
             trendData: trendData.tokens,

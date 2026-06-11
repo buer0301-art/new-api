@@ -20,6 +20,7 @@ For commercial licensing, please contact support@quantumnous.com
 import React from 'react';
 import { Tag, Space, Skeleton } from '@douyinfe/semi-ui';
 import { renderQuota } from '../../../helpers';
+import { formatTokenCount } from '../../../helpers/token-format';
 import CompactModeToggle from '../../common/ui/CompactModeToggle';
 import { useMinimumLoadingTime } from '../../../hooks/common/useMinimumLoadingTime';
 
@@ -36,6 +37,7 @@ const LogsActions = ({
 
   const placeholder = (
     <Space>
+      <Skeleton.Title style={{ width: 108, height: 21, borderRadius: 6 }} />
       <Skeleton.Title style={{ width: 108, height: 21, borderRadius: 6 }} />
       <Skeleton.Title style={{ width: 65, height: 21, borderRadius: 6 }} />
       <Skeleton.Title style={{ width: 64, height: 21, borderRadius: 6 }} />
@@ -56,6 +58,17 @@ const LogsActions = ({
             className='!rounded-lg'
           >
             {t('消耗额度')}: {renderQuota(stat.quota)}
+          </Tag>
+          <Tag
+            color='violet'
+            style={{
+              fontWeight: 500,
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+              padding: 13,
+            }}
+            className='!rounded-lg'
+          >
+            {t('消耗Token')}: {formatTokenCount(stat.token)}
           </Tag>
           <Tag
             color='pink'

@@ -22,13 +22,11 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   API,
-  getTodayEndTimestamp,
-  getTodayStartTimestamp,
   isAdmin,
   showError,
-  timestamp2string,
 } from '../../helpers';
 import { getDefaultTime } from '../../helpers/dashboard';
+import { getDashboardDefaultDateRangeStrings } from '../../helpers/dashboard-date-range';
 import { TIME_OPTIONS } from '../../constants/dashboard.constants';
 import { useIsMobile } from '../common/useIsMobile';
 import { useMinimumLoadingTime } from '../common/useMinimumLoadingTime';
@@ -50,8 +48,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     username: '',
     token_name: '',
     model_name: '',
-    start_timestamp: timestamp2string(getTodayStartTimestamp()),
-    end_timestamp: timestamp2string(getTodayEndTimestamp()),
+    ...getDashboardDefaultDateRangeStrings(),
     channel: '',
     data_export_default_time: '',
   });

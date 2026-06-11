@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
-import { formatLogQuota } from '@/lib/format'
+import { formatLogQuota, formatTokenCount } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useIsAdmin } from '@/hooks/use-admin'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -90,6 +90,11 @@ export function CommonLogsStats() {
         label={t('Usage')}
         value={sensitiveVisible ? formatLogQuota(stats?.quota || 0) : '••••'}
         accent='bg-sky-500/70'
+      />
+      <StatBadge
+        label={t('Consumed Tokens')}
+        value={sensitiveVisible ? formatTokenCount(stats?.token || 0) : '••••'}
+        accent='bg-violet-500/65'
       />
       <StatBadge
         label={t('RPM')}
