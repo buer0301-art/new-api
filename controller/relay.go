@@ -321,36 +321,60 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 	return channel, nil
 }
 
+type retryDecision struct {
+	shouldRetry bool
+	reason      string
+}
+
 func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) bool {
+	decision := getRetryDecision(c, openaiErr, retryTimes)
+	if openaiErr != nil {
+		logger.LogDebug(
+			c,
+			"relay retry decision: should_retry=%t reason=%s status_code=%d error_code=%s remaining_retries=%d",
+			decision.shouldRetry,
+			decision.reason,
+			openaiErr.StatusCode,
+			openaiErr.GetErrorCode(),
+			retryTimes,
+		)
+	}
+	return decision.shouldRetry
+}
+
+func getRetryDecision(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) retryDecision {
 	if openaiErr == nil {
-		return false
+		return retryDecision{reason: "nil_error"}
 	}
 	if service.ShouldSkipRetryAfterChannelAffinityFailure(c) {
-		return false
+		return retryDecision{reason: "channel_affinity_skip_retry"}
 	}
 	if types.IsChannelError(openaiErr) {
-		return true
+		return retryDecision{shouldRetry: true, reason: "channel_error"}
 	}
 	if types.IsSkipRetryError(openaiErr) {
-		return false
+		return retryDecision{reason: "skip_retry_error"}
 	}
 	if retryTimes <= 0 {
-		return false
+		return retryDecision{reason: "retry_times_exhausted"}
 	}
 	if _, ok := c.Get("specific_channel_id"); ok {
-		return false
+		return retryDecision{reason: "specific_channel"}
 	}
 	code := openaiErr.StatusCode
 	if code >= 200 && code < 300 {
-		return false
+		return retryDecision{reason: "success_status_code"}
 	}
 	if code < 100 || code > 599 {
-		return true
+		return retryDecision{shouldRetry: true, reason: "invalid_status_code"}
 	}
 	if operation_setting.IsAlwaysSkipRetryCode(openaiErr.GetErrorCode()) {
-		return false
+		return retryDecision{reason: "always_skip_retry_error_code"}
 	}
-	return operation_setting.ShouldRetryByStatusCode(code)
+	if operation_setting.ShouldRetryByStatusCode(code) {
+		return retryDecision{shouldRetry: true, reason: "retryable_status_code"}
+	}
+	return retryDecision{reason: "status_code_not_retryable"}
 }
 
 func processChannelError(c *gin.Context, channelError types.ChannelError, err *types.NewAPIError) {
