@@ -436,6 +436,16 @@ export function PaymentSettingsSection({
       CreemWebhookSecret: values.CreemWebhookSecret.trim(),
       CreemTestMode: values.CreemTestMode,
       CreemProducts: values.CreemProducts.trim(),
+      Web3PayEnabled: values.Web3PayEnabled,
+      Web3PayGatewayAPIBase: removeTrailingSlash(
+        values.Web3PayGatewayAPIBase.trim()
+      ),
+      Web3PayCheckoutMode:
+        values.Web3PayCheckoutMode === 'redirect' ? 'redirect' : 'inline',
+      Web3PayAppKey: values.Web3PayAppKey.trim(),
+      Web3PayApiSecret: values.Web3PayApiSecret.trim(),
+      Web3PayUnitPrice: values.Web3PayUnitPrice,
+      Web3PayMinTopUp: values.Web3PayMinTopUp,
       WaffoEnabled: values.WaffoEnabled,
       WaffoSandbox: values.WaffoSandbox,
       WaffoMerchantId: values.WaffoMerchantId.trim(),
@@ -481,6 +491,18 @@ export function PaymentSettingsSection({
       CreemWebhookSecret: initialRef.current.CreemWebhookSecret.trim(),
       CreemTestMode: initialRef.current.CreemTestMode,
       CreemProducts: initialRef.current.CreemProducts.trim(),
+      Web3PayEnabled: initialRef.current.Web3PayEnabled,
+      Web3PayGatewayAPIBase: removeTrailingSlash(
+        initialRef.current.Web3PayGatewayAPIBase.trim()
+      ),
+      Web3PayCheckoutMode:
+        initialRef.current.Web3PayCheckoutMode === 'redirect'
+          ? 'redirect'
+          : 'inline',
+      Web3PayAppKey: initialRef.current.Web3PayAppKey.trim(),
+      Web3PayApiSecret: initialRef.current.Web3PayApiSecret.trim(),
+      Web3PayUnitPrice: initialRef.current.Web3PayUnitPrice,
+      Web3PayMinTopUp: initialRef.current.Web3PayMinTopUp,
       WaffoEnabled: initialRef.current.WaffoEnabled,
       WaffoSandbox: initialRef.current.WaffoSandbox,
       WaffoMerchantId: initialRef.current.WaffoMerchantId.trim(),
@@ -626,6 +648,55 @@ export function PaymentSettingsSection({
       normalizeJsonForComparison(initial.CreemProducts)
     ) {
       updates.push({ key: 'CreemProducts', value: sanitized.CreemProducts })
+    }
+
+    if (sanitized.Web3PayEnabled !== initial.Web3PayEnabled) {
+      updates.push({
+        key: 'Web3PayEnabled',
+        value: sanitized.Web3PayEnabled,
+      })
+    }
+
+    if (sanitized.Web3PayGatewayAPIBase !== initial.Web3PayGatewayAPIBase) {
+      updates.push({
+        key: 'Web3PayGatewayAPIBase',
+        value: sanitized.Web3PayGatewayAPIBase,
+      })
+    }
+
+    if (sanitized.Web3PayCheckoutMode !== initial.Web3PayCheckoutMode) {
+      updates.push({
+        key: 'Web3PayCheckoutMode',
+        value: sanitized.Web3PayCheckoutMode,
+      })
+    }
+
+    if (
+      sanitized.Web3PayAppKey &&
+      sanitized.Web3PayAppKey !== initial.Web3PayAppKey
+    ) {
+      updates.push({ key: 'Web3PayAppKey', value: sanitized.Web3PayAppKey })
+    }
+
+    if (
+      sanitized.Web3PayApiSecret &&
+      sanitized.Web3PayApiSecret !== initial.Web3PayApiSecret
+    ) {
+      updates.push({
+        key: 'Web3PayApiSecret',
+        value: sanitized.Web3PayApiSecret,
+      })
+    }
+
+    if (sanitized.Web3PayUnitPrice !== initial.Web3PayUnitPrice) {
+      updates.push({
+        key: 'Web3PayUnitPrice',
+        value: sanitized.Web3PayUnitPrice,
+      })
+    }
+
+    if (sanitized.Web3PayMinTopUp !== initial.Web3PayMinTopUp) {
+      updates.push({ key: 'Web3PayMinTopUp', value: sanitized.Web3PayMinTopUp })
     }
 
     if (sanitized.WaffoEnabled !== initial.WaffoEnabled) {
@@ -879,7 +950,6 @@ export function PaymentSettingsSection({
     WaffoPancakeMerchantID: currentFormValues.WaffoPancakeMerchantID,
     WaffoPancakePrivateKey: currentFormValues.WaffoPancakePrivateKey,
     WaffoPancakeReturnURL: currentFormValues.WaffoPancakeReturnURL,
-
   }
 
   return (
@@ -1618,7 +1688,6 @@ export function PaymentSettingsSection({
 
           <Separator />
 
-
           <div className='space-y-6'>
             <div>
               <h3 className='text-lg font-medium'>{t('Web3 Pay Gateway')}</h3>
@@ -1845,7 +1914,6 @@ export function PaymentSettingsSection({
             onPayMethodsChange={setWaffoPayMethods}
           />
         </SettingsForm>
-
       </Form>
     </SettingsSection>
   )
