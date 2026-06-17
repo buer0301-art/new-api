@@ -195,27 +195,31 @@ export function ModelsFilter(props: ModelsFilterProps) {
 
           {/* Custom time range */}
           <div className='grid gap-2.5'>
-            <div className='grid gap-2'>
-              <Label htmlFor='start_timestamp'>{t('Start Time')}</Label>
-              <DateTimePicker
-                value={filters.start_timestamp}
-                onChange={(date) =>
-                  handleChange('start_timestamp', date || undefined)
-                }
-                placeholder={t('Select start time')}
-              />
-            </div>
+            {!isAdmin && (
+              <>
+                <div className='grid gap-2'>
+                  <Label htmlFor='start_timestamp'>{t('Start Time')}</Label>
+                  <DateTimePicker
+                    value={filters.start_timestamp}
+                    onChange={(date) =>
+                      handleChange('start_timestamp', date || undefined)
+                    }
+                    placeholder={t('Select start time')}
+                  />
+                </div>
 
-            <div className='grid gap-2'>
-              <Label htmlFor='end_timestamp'>{t('End Time')}</Label>
-              <DateTimePicker
-                value={filters.end_timestamp}
-                onChange={(date) =>
-                  handleChange('end_timestamp', date || undefined)
-                }
-                placeholder={t('Select end time')}
-              />
-            </div>
+                <div className='grid gap-2'>
+                  <Label htmlFor='end_timestamp'>{t('End Time')}</Label>
+                  <DateTimePicker
+                    value={filters.end_timestamp}
+                    onChange={(date) =>
+                      handleChange('end_timestamp', date || undefined)
+                    }
+                    placeholder={t('Select end time')}
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           <SectionDivider label={t('Chart Settings')} />

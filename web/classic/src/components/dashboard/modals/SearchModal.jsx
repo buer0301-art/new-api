@@ -55,7 +55,7 @@ const SearchModal = ({
       centered
     >
       <Form ref={formRef} layout='vertical' className='w-full'>
-        {isAdminUser &&
+        {!isAdminUser &&
           createFormField(Form.DatePicker, {
             field: 'start_timestamp',
             label: t('起始时间'),
@@ -66,7 +66,7 @@ const SearchModal = ({
             onChange: (value) => handleInputChange(value, 'start_timestamp'),
           })}
 
-        {isAdminUser &&
+        {!isAdminUser &&
           createFormField(Form.DatePicker, {
             field: 'end_timestamp',
             label: t('结束时间'),
