@@ -192,6 +192,10 @@ type PaymentBaseFormValues = Omit<
   PaymentFormValues,
   keyof WaffoFormFieldValues | keyof WaffoPancakeSettingsValues
 >
+type PaymentOptionUpdate = {
+  key: string
+  value: string | number | boolean
+}
 
 const WEB3_PAY_FIELD_NAMES = [
   'Web3PayEnabled',
@@ -422,6 +426,21 @@ export function PaymentSettingsSection({
     [setPaymentValue]
   )
 
+  const saveOptionUpdates = React.useCallback(
+    async (updates: PaymentOptionUpdate[]) => {
+      try {
+        for (const update of updates) {
+          const result = await updateOption.mutateAsync(update)
+          if (!result.success) return false
+        }
+        return true
+      } catch {
+        return false
+      }
+    },
+    [updateOption]
+  )
+
   React.useEffect(() => {
     const parsedDefaults = JSON.parse(defaultsSignature) as PaymentFormValues
     initialRef.current = parsedDefaults
@@ -553,7 +572,7 @@ export function PaymentSettingsSection({
       ),
     }
 
-    const updates: Array<{ key: string; value: string | number | boolean }> = []
+    const updates: PaymentOptionUpdate[] = []
 
     if (sanitized.PayAddress !== initial.PayAddress) {
       updates.push({ key: 'PayAddress', value: sanitized.PayAddress })
@@ -823,9 +842,8 @@ export function PaymentSettingsSection({
       }
     }
 
-    for (const update of updates) {
-      await updateOption.mutateAsync(update)
-    }
+    const savedOptions = await saveOptionUpdates(updates)
+    if (!savedOptions) return
 
     if (!hasWaffoPancakeChanges) {
       return
@@ -905,7 +923,7 @@ export function PaymentSettingsSection({
       Web3PayMinTopUp: initialRef.current.Web3PayMinTopUp,
     }
 
-    const updates: Array<{ key: string; value: string | number | boolean }> = []
+    const updates: PaymentOptionUpdate[] = []
 
     if (sanitized.Web3PayEnabled !== initial.Web3PayEnabled) {
       updates.push({
@@ -961,13 +979,7 @@ export function PaymentSettingsSection({
       return
     }
 
-    try {
-      for (const update of updates) {
-        await updateOption.mutateAsync(update)
-      }
-    } catch {
-      // useUpdateOption already shows the server/client error toast.
-    }
+    await saveOptionUpdates(updates)
   }
 
   const currentFormValues = form.watch()
