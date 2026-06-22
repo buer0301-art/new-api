@@ -195,13 +195,12 @@ export function Dashboard() {
     }))
   }, [])
 
-  const handleResetFilters = useCallback(() => {
-    setModelFilters((prev) => ({
-      ...buildDefaultDashboardFilters(chartPreferences),
-      start_timestamp: prev.start_timestamp,
-      end_timestamp: prev.end_timestamp,
-    }))
-  }, [chartPreferences])
+  const handleResetFilters = useCallback(
+    (filters?: DashboardFilters) => {
+      setModelFilters(filters ?? buildDefaultDashboardFilters(chartPreferences))
+    },
+    [chartPreferences]
+  )
 
   const handleDataUpdate = useCallback(
     (data: QuotaDataItem[], loading: boolean) => {

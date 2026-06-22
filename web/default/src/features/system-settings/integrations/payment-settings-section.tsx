@@ -799,21 +799,25 @@ export function PaymentSettingsSection({
       return
     }
 
+    if (hasWaffoPancakeChanges) {
+      if (!sanitized.WaffoPancakeMerchantID) {
+        toast.error(t('Merchant ID is required'))
+        return
+      }
+
+      if (!waffoPancakeSelection.storeID || !waffoPancakeSelection.productID) {
+        toast.error(
+          t('Pick or create both a store and a product before saving.')
+        )
+        return
+      }
+    }
+
     for (const update of updates) {
       await updateOption.mutateAsync(update)
     }
 
     if (!hasWaffoPancakeChanges) {
-      return
-    }
-
-    if (!sanitized.WaffoPancakeMerchantID) {
-      toast.error(t('Merchant ID is required'))
-      return
-    }
-
-    if (!waffoPancakeSelection.storeID || !waffoPancakeSelection.productID) {
-      toast.error(t('Pick or create both a store and a product before saving.'))
       return
     }
 

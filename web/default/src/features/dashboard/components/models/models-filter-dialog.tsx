@@ -55,7 +55,7 @@ interface ModelsFilterProps {
   // these so reopening it never discards a manually picked range.
   currentFilters: DashboardFilters
   onFilterChange: (filters: DashboardFilters) => void
-  onReset: () => void
+  onReset: (filters?: DashboardFilters) => void
   titleKey?: string
   descriptionKey?: string
 }
@@ -133,13 +133,14 @@ export function ModelsFilter(props: ModelsFilterProps) {
   const handleReset = () => {
     const days = props.preferences.defaultTimeRangeDays
     const { start, end } = getRollingDateRange(days)
-    setFilters({
+    const resetFilters: DashboardFilters = {
       ...buildDefaultDashboardFilters(props.preferences),
       start_timestamp: start,
       end_timestamp: end,
-    })
+    }
+    setFilters(resetFilters)
     setSelectedRange(days)
-    props.onReset()
+    props.onReset(resetFilters)
     setOpen(false)
   }
 
