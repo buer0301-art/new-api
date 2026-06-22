@@ -55,6 +55,9 @@ type responseTask struct {
 		Message string `json:"message"`
 		Code    string `json:"code"`
 	} `json:"error,omitempty"`
+	Video *struct {
+		URL string `json:"url"`
+	} `json:"video,omitempty"`
 }
 
 // ============================
@@ -302,9 +305,11 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 		taskResult.Status = model.TaskStatusQueued
 	case "processing", "in_progress":
 		taskResult.Status = model.TaskStatusInProgress
-	case "completed":
+	case "completed", "done", "succeeded", "success":
 		taskResult.Status = model.TaskStatusSuccess
-		// Url intentionally left empty — the caller constructs the proxy URL using the public task ID
+		if resTask.Video != nil {
+			taskResult.Url = strings.TrimSpace(resTask.Video.URL)
+		}
 	case "failed", "cancelled":
 		taskResult.Status = model.TaskStatusFailure
 		if resTask.Error != nil {
