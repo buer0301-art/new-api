@@ -193,6 +193,16 @@ type PaymentBaseFormValues = Omit<
   keyof WaffoFormFieldValues | keyof WaffoPancakeSettingsValues
 >
 
+const WEB3_PAY_FIELD_NAMES = [
+  'Web3PayEnabled',
+  'Web3PayGatewayAPIBase',
+  'Web3PayCheckoutMode',
+  'Web3PayAppKey',
+  'Web3PayApiSecret',
+  'Web3PayUnitPrice',
+  'Web3PayMinTopUp',
+] as const satisfies readonly (keyof PaymentFormValues)[]
+
 const CURRENT_COMPLIANCE_TERMS_VERSION = 'v1'
 const paymentTabContentClassName = 'mt-6 min-w-0'
 
@@ -863,6 +873,9 @@ export function PaymentSettingsSection({
   }
 
   const saveWeb3PaySettings = async () => {
+    const isValid = await form.trigger(WEB3_PAY_FIELD_NAMES)
+    if (!isValid) return
+
     const values = form.getValues()
     const sanitized = {
       Web3PayEnabled: values.Web3PayEnabled as boolean,
@@ -943,8 +956,17 @@ export function PaymentSettingsSection({
       updates.push({ key: 'Web3PayMinTopUp', value: sanitized.Web3PayMinTopUp })
     }
 
-    for (const update of updates) {
-      await updateOption.mutateAsync(update)
+    if (updates.length === 0) {
+      toast.info(t('No changes to save'))
+      return
+    }
+
+    try {
+      for (const update of updates) {
+        await updateOption.mutateAsync(update)
+      }
+    } catch {
+      // useUpdateOption already shows the server/client error toast.
     }
   }
 
@@ -1497,10 +1519,10 @@ export function PaymentSettingsSection({
 
             <Button
               type='button'
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.preventDefault()
                 e.stopPropagation()
-                saveWeb3PaySettings()
+                await saveWeb3PaySettings()
               }}
               disabled={updateOption.isPending}
             >

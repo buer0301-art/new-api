@@ -33,11 +33,13 @@ import {
 import { SectionPageLayout } from '@/components/layout'
 import { FadeIn } from '@/components/page-transition'
 import { ModelsChartPreferences } from './components/models/models-chart-preferences'
+import { ModelsDateRangeFilter } from './components/models/models-date-range-filter'
 import { ModelsFilter } from './components/models/models-filter-dialog'
 import { OverviewDashboard } from './components/overview/overview-dashboard'
 import { DEFAULT_TIME_GRANULARITY } from './constants'
 import {
   buildDefaultDashboardFilters,
+  buildTodayDashboardRange,
   getDefaultDays,
   getSavedChartPreferences,
   getSavedGranularity,
@@ -223,6 +225,26 @@ export function Dashboard() {
     []
   )
 
+  const handleDateRangeChange = useCallback(
+    (range: { start?: Date; end?: Date }) => {
+      setModelFilters((prev) => ({
+        ...prev,
+        start_timestamp: range.start,
+        end_timestamp: range.end,
+      }))
+    },
+    []
+  )
+
+  const handleResetDateRangeToday = useCallback(() => {
+    const { start, end } = buildTodayDashboardRange()
+    setModelFilters((prev) => ({
+      ...prev,
+      start_timestamp: start,
+      end_timestamp: end,
+    }))
+  }, [])
+
   const meta = SECTION_META[activeSection] ?? SECTION_META.overview
   const isAdmin = Boolean(userRole && userRole >= ROLE.ADMIN)
   const visibleSections = useMemo(
@@ -246,6 +268,14 @@ export function Dashboard() {
   const modelActions =
     activeSection === 'models' ? (
       <>
+        {isAdmin && (
+          <ModelsDateRangeFilter
+            start={modelFilters.start_timestamp}
+            end={modelFilters.end_timestamp}
+            onChange={handleDateRangeChange}
+            onResetToday={handleResetDateRangeToday}
+          />
+        )}
         <ModelsChartPreferences
           preferences={chartPreferences}
           onPreferencesChange={handleChartPreferencesChange}
