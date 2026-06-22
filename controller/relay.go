@@ -179,11 +179,10 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}()
 
 	retryParam := &service.RetryParam{
-		Ctx:         c,
-		TokenGroup:  relayInfo.TokenGroup,
-		ModelName:   relayInfo.OriginModelName,
-		RequestPath: c.Request.URL.Path,
-		Retry:       common.GetPointer(0),
+		Ctx:        c,
+		TokenGroup: relayInfo.TokenGroup,
+		ModelName:  relayInfo.OriginModelName,
+		Retry:      common.GetPointer(0),
 	}
 	relayInfo.RetryIndex = 0
 	relayInfo.LastError = nil
@@ -327,11 +326,17 @@ type retryDecision struct {
 	reason      string
 }
 
+type relayRetryLogLevel int
+
+const (
+	relayRetryLogLevelDebug relayRetryLogLevel = iota
+	relayRetryLogLevelError
+)
+
 func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) bool {
 	decision := getRetryDecision(c, openaiErr, retryTimes)
 	if openaiErr != nil {
-		logger.LogDebug(
-			c,
+		message := fmt.Sprintf(
 			"relay retry decision: should_retry=%t reason=%s status_code=%d error_code=%s remaining_retries=%d",
 			decision.shouldRetry,
 			decision.reason,
@@ -339,8 +344,20 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 			openaiErr.GetErrorCode(),
 			retryTimes,
 		)
+		if getRelayRetryLogLevel(decision) == relayRetryLogLevelDebug {
+			logger.LogDebug(c, message)
+		} else {
+			logger.LogWarn(c, message)
+		}
 	}
 	return decision.shouldRetry
+}
+
+func getRelayRetryLogLevel(decision retryDecision) relayRetryLogLevel {
+	if decision.shouldRetry {
+		return relayRetryLogLevelDebug
+	}
+	return relayRetryLogLevelError
 }
 
 func getRetryDecision(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) retryDecision {
@@ -532,11 +549,10 @@ func RelayTask(c *gin.Context) {
 	}()
 
 	retryParam := &service.RetryParam{
-		Ctx:         c,
-		TokenGroup:  relayInfo.TokenGroup,
-		ModelName:   relayInfo.OriginModelName,
-		RequestPath: c.Request.URL.Path,
-		Retry:       common.GetPointer(0),
+		Ctx:        c,
+		TokenGroup: relayInfo.TokenGroup,
+		ModelName:  relayInfo.OriginModelName,
+		Retry:      common.GetPointer(0),
 	}
 
 	for ; retryParam.GetRetry() <= common.RetryTimes; retryParam.IncreaseRetry() {

@@ -62,3 +62,15 @@ func TestGetRetryDecisionSkipsExplicitSkipRetryError(t *testing.T) {
 	require.False(t, decision.shouldRetry)
 	require.Equal(t, "skip_retry_error", decision.reason)
 }
+
+func TestRetryDecisionUsesVisibleLogWhenSkipped(t *testing.T) {
+	decision := retryDecision{reason: "retry_times_exhausted"}
+
+	require.Equal(t, relayRetryLogLevelError, getRelayRetryLogLevel(decision))
+}
+
+func TestRetryDecisionUsesDebugLogWhenRetrying(t *testing.T) {
+	decision := retryDecision{shouldRetry: true, reason: "retryable_status_code"}
+
+	require.Equal(t, relayRetryLogLevelDebug, getRelayRetryLogLevel(decision))
+}

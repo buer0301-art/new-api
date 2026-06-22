@@ -487,10 +487,9 @@ func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRe
 				if message.ToolCalls != nil {
 					for _, toolCall := range message.ParseToolCalls() {
 						inputObj := make(map[string]any)
-						if args := toolCall.Function.Arguments; args != "" {
-							if err := json.Unmarshal([]byte(args), &inputObj); err != nil {
-								common.SysLog("tool call function arguments is not a map[string]any: " + fmt.Sprintf("%v", toolCall.Function.Arguments))
-							}
+						if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &inputObj); err != nil {
+							common.SysLog("tool call function arguments is not a map[string]any: " + fmt.Sprintf("%v", toolCall.Function.Arguments))
+							continue
 						}
 						claudeMediaMessages = append(claudeMediaMessages, dto.ClaudeMediaMessage{
 							Type:  "tool_use",
@@ -514,6 +513,437 @@ func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRe
 	claudeRequest.Prompt = ""
 	claudeRequest.Messages = claudeMessages
 	return &claudeRequest, nil
+}
+
+type responsesInputItem struct {
+	Type      string          `json:"type,omitempty"`
+	Role      string          `json:"role,omitempty"`
+	Content   json.RawMessage `json:"content,omitempty"`
+	CallID    string          `json:"call_id,omitempty"`
+	Output    any             `json:"output,omitempty"`
+	Name      string          `json:"name,omitempty"`
+	Arguments any             `json:"arguments,omitempty"`
+}
+
+func RequestOpenAIResponses2ClaudeMessage(c *gin.Context, request dto.OpenAIResponsesRequest) (*dto.ClaudeRequest, error) {
+	openAIRequest, err := openAIResponsesRequestToChatRequest(request)
+	if err != nil {
+		return nil, err
+	}
+	return RequestOpenAI2ClaudeMessage(c, *openAIRequest)
+}
+
+func openAIResponsesRequestToChatRequest(request dto.OpenAIResponsesRequest) (*dto.GeneralOpenAIRequest, error) {
+	messages, err := openAIResponsesInputToMessages(request.Input)
+	if err != nil {
+		return nil, err
+	}
+	if len(request.Instructions) > 0 && string(request.Instructions) != "null" {
+		instructionText, err := rawMessageToText(request.Instructions)
+		if err != nil {
+			return nil, fmt.Errorf("invalid responses instructions: %w", err)
+		}
+		if strings.TrimSpace(instructionText) != "" {
+			messages = append([]dto.Message{{
+				Role:    "system",
+				Content: instructionText,
+			}}, messages...)
+		}
+	}
+	if len(messages) == 0 {
+		messages = []dto.Message{{
+			Role:    "user",
+			Content: "...",
+		}}
+	}
+
+	chatRequest := &dto.GeneralOpenAIRequest{
+		Model:            request.Model,
+		Messages:         messages,
+		Stream:           request.Stream,
+		Temperature:      request.Temperature,
+		TopP:             request.TopP,
+		MaxTokens:        request.MaxOutputTokens,
+		StreamOptions:    request.StreamOptions,
+		Metadata:         request.Metadata,
+		Store:            request.Store,
+		User:             request.User,
+		PromptCacheKey:   rawMessageString(request.PromptCacheKey),
+		ServiceTier:      stringRawMessage(request.ServiceTier),
+		Reasoning:        reasoningRawMessage(request.Reasoning),
+		ResponseFormat:   responsesTextToChatResponseFormat(request.Text),
+		ParallelTooCalls: rawMessageBoolPointer(request.ParallelToolCalls),
+	}
+
+	if len(request.Tools) > 0 {
+		tools, err := openAIResponsesToolsToChatTools(request.Tools)
+		if err != nil {
+			return nil, err
+		}
+		chatRequest.Tools = tools
+	}
+	if len(request.ToolChoice) > 0 {
+		toolChoice, err := openAIResponsesToolChoiceToChatToolChoice(request.ToolChoice)
+		if err != nil {
+			return nil, err
+		}
+		chatRequest.ToolChoice = toolChoice
+	}
+
+	return chatRequest, nil
+}
+
+func openAIResponsesInputToMessages(input json.RawMessage) ([]dto.Message, error) {
+	if len(input) == 0 || string(input) == "null" {
+		return nil, nil
+	}
+
+	switch common.GetJsonType(input) {
+	case "string":
+		text, err := rawMessageToText(input)
+		if err != nil {
+			return nil, err
+		}
+		return []dto.Message{{Role: "user", Content: text}}, nil
+	case "array":
+		var items []responsesInputItem
+		if err := common.Unmarshal(input, &items); err != nil {
+			return nil, err
+		}
+		messages := make([]dto.Message, 0, len(items))
+		for _, item := range items {
+			message, ok, err := responsesInputItemToMessage(item)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				messages = append(messages, message)
+			}
+		}
+		return messages, nil
+	default:
+		return nil, fmt.Errorf("unsupported responses input type: %s", common.GetJsonType(input))
+	}
+}
+
+func responsesInputItemToMessage(item responsesInputItem) (dto.Message, bool, error) {
+	switch item.Type {
+	case "function_call_output":
+		content := common.Interface2String(item.Output)
+		if content == "" && item.Output != nil {
+			data, err := common.Marshal(item.Output)
+			if err != nil {
+				return dto.Message{}, false, err
+			}
+			content = string(data)
+		}
+		return dto.Message{
+			Role:       "tool",
+			Content:    content,
+			ToolCallId: item.CallID,
+		}, true, nil
+	case "function_call":
+		arguments, err := argumentsString(item.Arguments)
+		if err != nil {
+			return dto.Message{}, false, err
+		}
+		message := dto.Message{Role: "assistant"}
+		message.SetNullContent()
+		message.SetToolCalls([]dto.ToolCallRequest{{
+			ID:   item.CallID,
+			Type: "function",
+			Function: dto.FunctionRequest{
+				Name:      item.Name,
+				Arguments: arguments,
+			},
+		}})
+		return message, true, nil
+	case "", "message", "input_message", "output_message":
+		role := strings.TrimSpace(item.Role)
+		if role == "" {
+			role = "user"
+		}
+		content, err := responsesContentToChatContent(item.Content, role)
+		if err != nil {
+			return dto.Message{}, false, err
+		}
+		return dto.Message{Role: role, Content: content}, true, nil
+	default:
+		return dto.Message{}, false, nil
+	}
+}
+
+func responsesContentToChatContent(content json.RawMessage, role string) (any, error) {
+	if len(content) == 0 || string(content) == "null" {
+		return "", nil
+	}
+	switch common.GetJsonType(content) {
+	case "string":
+		return rawMessageToText(content)
+	case "array":
+		var parts []map[string]any
+		if err := common.Unmarshal(content, &parts); err != nil {
+			return nil, err
+		}
+		chatParts := make([]any, 0, len(parts))
+		for _, part := range parts {
+			contentType, _ := part["type"].(string)
+			switch contentType {
+			case "input_text", "output_text", "text":
+				chatParts = append(chatParts, map[string]any{
+					"type": "text",
+					"text": common.Interface2String(part["text"]),
+				})
+			case "input_image", dto.ContentTypeImageURL:
+				chatParts = append(chatParts, map[string]any{
+					"type":      dto.ContentTypeImageURL,
+					"image_url": responsesURLValue(part["image_url"]),
+				})
+			case "input_file", dto.ContentTypeFile:
+				chatParts = append(chatParts, map[string]any{
+					"type": "file",
+					"file": responsesFileValue(part),
+				})
+			}
+		}
+		if len(chatParts) == 0 {
+			return "", nil
+		}
+		if len(chatParts) == 1 {
+			if textPart, ok := chatParts[0].(map[string]any); ok && textPart["type"] == "text" {
+				return common.Interface2String(textPart["text"]), nil
+			}
+		}
+		return chatParts, nil
+	default:
+		text, err := rawMessageToText(content)
+		if err != nil {
+			return nil, err
+		}
+		if role == "assistant" || role == "user" || role == "system" || role == "developer" {
+			return text, nil
+		}
+		return text, nil
+	}
+}
+
+func rawMessageToText(raw json.RawMessage) (string, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return "", nil
+	}
+	if common.GetJsonType(raw) == "string" {
+		var text string
+		if err := common.Unmarshal(raw, &text); err != nil {
+			return "", err
+		}
+		return text, nil
+	}
+	return string(raw), nil
+}
+
+func rawMessageString(raw json.RawMessage) string {
+	if len(raw) == 0 || string(raw) == "null" {
+		return ""
+	}
+	text, err := rawMessageToText(raw)
+	if err != nil {
+		return ""
+	}
+	return text
+}
+
+func stringRawMessage(value string) json.RawMessage {
+	if value == "" {
+		return nil
+	}
+	data, err := common.Marshal(value)
+	if err != nil {
+		return nil
+	}
+	return data
+}
+
+func rawMessageBoolPointer(raw json.RawMessage) *bool {
+	if len(raw) == 0 || string(raw) == "null" || common.GetJsonType(raw) != "boolean" {
+		return nil
+	}
+	var value bool
+	if err := common.Unmarshal(raw, &value); err != nil {
+		return nil
+	}
+	return &value
+}
+
+func reasoningRawMessage(reasoning *dto.Reasoning) json.RawMessage {
+	if reasoning == nil {
+		return nil
+	}
+	data, err := common.Marshal(reasoning)
+	if err != nil {
+		return nil
+	}
+	return data
+}
+
+func argumentsString(arguments any) (string, error) {
+	switch value := arguments.(type) {
+	case nil:
+		return "{}", nil
+	case string:
+		return value, nil
+	case json.RawMessage:
+		if len(value) == 0 {
+			return "{}", nil
+		}
+		if common.GetJsonType(value) == "string" {
+			var text string
+			if err := common.Unmarshal(value, &text); err != nil {
+				return "", err
+			}
+			return text, nil
+		}
+		return string(value), nil
+	default:
+		data, err := common.Marshal(value)
+		if err != nil {
+			return "", err
+		}
+		return string(data), nil
+	}
+}
+
+func responsesURLValue(value any) any {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case map[string]any:
+		if url := common.Interface2String(typed["url"]); url != "" {
+			return map[string]any{
+				"url":    url,
+				"detail": common.Interface2String(typed["detail"]),
+			}
+		}
+	}
+	return value
+}
+
+func responsesFileValue(part map[string]any) any {
+	if file := part["file"]; file != nil {
+		return file
+	}
+	fileValue := map[string]any{}
+	if fileID := common.Interface2String(part["file_id"]); fileID != "" {
+		fileValue["file_id"] = fileID
+	}
+	if fileData := common.Interface2String(part["file_data"]); fileData != "" {
+		fileValue["file_data"] = fileData
+	}
+	if filename := common.Interface2String(part["filename"]); filename != "" {
+		fileValue["filename"] = filename
+	}
+	if fileURL := common.Interface2String(part["file_url"]); fileURL != "" {
+		fileValue["file_data"] = fileURL
+	}
+	if len(fileValue) == 0 {
+		return part
+	}
+	return fileValue
+}
+
+func openAIResponsesToolsToChatTools(raw json.RawMessage) ([]dto.ToolCallRequest, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+	var tools []map[string]any
+	if err := common.Unmarshal(raw, &tools); err != nil {
+		return nil, err
+	}
+	chatTools := make([]dto.ToolCallRequest, 0, len(tools))
+	for _, tool := range tools {
+		if toolType, _ := tool["type"].(string); toolType != "function" {
+			continue
+		}
+		name := common.Interface2String(tool["name"])
+		if name == "" {
+			continue
+		}
+		parameters := tool["parameters"]
+		if parameters == nil {
+			parameters = map[string]any{
+				"type":       "object",
+				"properties": map[string]any{},
+				"required":   []any{},
+			}
+		}
+		chatTools = append(chatTools, dto.ToolCallRequest{
+			Type: "function",
+			Function: dto.FunctionRequest{
+				Name:        name,
+				Description: common.Interface2String(tool["description"]),
+				Parameters:  parameters,
+			},
+		})
+	}
+	return chatTools, nil
+}
+
+func openAIResponsesToolChoiceToChatToolChoice(raw json.RawMessage) (any, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+	if common.GetJsonType(raw) == "string" {
+		var toolChoice string
+		if err := common.Unmarshal(raw, &toolChoice); err != nil {
+			return nil, err
+		}
+		return toolChoice, nil
+	}
+	var toolChoice map[string]any
+	if err := common.Unmarshal(raw, &toolChoice); err != nil {
+		return nil, err
+	}
+	if toolChoice["type"] == "function" {
+		if name := common.Interface2String(toolChoice["name"]); name != "" {
+			return map[string]any{
+				"type": "function",
+				"function": map[string]any{
+					"name": name,
+				},
+			}, nil
+		}
+	}
+	return toolChoice, nil
+}
+
+func responsesTextToChatResponseFormat(raw json.RawMessage) *dto.ResponseFormat {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	var payload map[string]json.RawMessage
+	if err := common.Unmarshal(raw, &payload); err != nil {
+		return nil
+	}
+	formatRaw, ok := payload["format"]
+	if !ok || len(formatRaw) == 0 || string(formatRaw) == "null" {
+		return nil
+	}
+	var format map[string]json.RawMessage
+	if err := common.Unmarshal(formatRaw, &format); err != nil {
+		return nil
+	}
+	typeRaw, ok := format["type"]
+	if !ok {
+		return nil
+	}
+	formatType, err := rawMessageToText(typeRaw)
+	if err != nil || formatType == "" {
+		return nil
+	}
+	responseFormat := &dto.ResponseFormat{Type: formatType}
+	if formatType == "json_schema" {
+		responseFormat.JsonSchema = formatRaw
+	}
+	return responseFormat
 }
 
 func StreamResponseClaude2OpenAI(claudeResponse *dto.ClaudeResponse) *dto.ChatCompletionsStreamResponse {
@@ -658,6 +1088,185 @@ func ResponseClaude2OpenAI(claudeResponse *dto.ClaudeResponse) *dto.OpenAITextRe
 	choices = append(choices, choice)
 	fullTextResponse.Choices = choices
 	return &fullTextResponse
+}
+
+func ResponseClaude2OpenAIResponses(claudeResponse *dto.ClaudeResponse, usage *dto.Usage, created int64) *dto.OpenAIResponsesResponse {
+	response := &dto.OpenAIResponsesResponse{
+		ID:        claudeResponse.Id,
+		Object:    "response",
+		CreatedAt: int(created),
+		Status:    json.RawMessage(`"completed"`),
+		Model:     claudeResponse.Model,
+		Output:    make([]dto.ResponsesOutput, 0, len(claudeResponse.Content)),
+		Usage:     buildResponsesUsageFromClaudeUsage(usage),
+	}
+	if response.ID == "" {
+		response.ID = fmt.Sprintf("resp_%s", common.GetUUID())
+	}
+	for _, content := range claudeResponse.Content {
+		switch content.Type {
+		case "text":
+			output := dto.ResponsesOutput{
+				Type:   "message",
+				ID:     fmt.Sprintf("msg_%s", common.GetUUID()),
+				Status: "completed",
+				Role:   "assistant",
+				Content: []dto.ResponsesOutputContent{{
+					Type:        "output_text",
+					Text:        content.GetText(),
+					Annotations: []interface{}{},
+				}},
+			}
+			response.Output = append(response.Output, output)
+		case "tool_use":
+			args, _ := common.Marshal(content.Input)
+			response.Output = append(response.Output, dto.ResponsesOutput{
+				Type:      "function_call",
+				ID:        content.Id,
+				Status:    "completed",
+				CallId:    content.Id,
+				Name:      content.Name,
+				Arguments: args,
+			})
+		}
+	}
+	return response
+}
+
+func buildResponsesUsageFromClaudeUsage(usage *dto.Usage) *dto.Usage {
+	if usage == nil {
+		return nil
+	}
+	openAIUsage := buildOpenAIStyleUsageFromClaudeUsage(usage)
+	openAIUsage.InputTokens = openAIUsage.PromptTokens
+	openAIUsage.OutputTokens = openAIUsage.CompletionTokens
+	openAIUsage.TotalTokens = openAIUsage.InputTokens + openAIUsage.OutputTokens
+	openAIUsage.InputTokensDetails = &dto.InputTokenDetails{
+		CachedTokens: openAIUsage.PromptTokensDetails.CachedTokens,
+	}
+	return &openAIUsage
+}
+
+func handleClaudeStreamAsResponses(c *gin.Context, info *relaycommon.RelayInfo, claudeInfo *ClaudeResponseInfo, claudeResponse *dto.ClaudeResponse) *types.NewAPIError {
+	if !FormatClaudeResponseInfo(claudeResponse, nil, claudeInfo) {
+		return nil
+	}
+
+	responseID := claudeInfo.ResponseId
+	if responseID == "" {
+		responseID = fmt.Sprintf("resp_%s", common.GetUUID())
+	}
+	response := &dto.OpenAIResponsesResponse{
+		ID:        responseID,
+		Object:    "response",
+		CreatedAt: int(claudeInfo.Created),
+		Status:    json.RawMessage(`"in_progress"`),
+		Model:     claudeInfo.Model,
+	}
+	if response.Model == "" {
+		response.Model = info.UpstreamModelName
+	}
+
+	send := func(event dto.ResponsesStreamResponse) *types.NewAPIError {
+		data, err := common.Marshal(event)
+		if err != nil {
+			return types.NewError(err, types.ErrorCodeBadResponseBody)
+		}
+		helper.ResponseChunkData(c, event, string(data))
+		return nil
+	}
+
+	switch claudeResponse.Type {
+	case "message_start":
+		return send(dto.ResponsesStreamResponse{
+			Type:     "response.created",
+			Response: response,
+		})
+	case "content_block_start":
+		if claudeResponse.ContentBlock == nil {
+			return nil
+		}
+		index := claudeResponse.GetIndex()
+		switch claudeResponse.ContentBlock.Type {
+		case "text":
+			item := &dto.ResponsesOutput{
+				Type:   "message",
+				ID:     fmt.Sprintf("msg_%s", responseID),
+				Status: "in_progress",
+				Role:   "assistant",
+			}
+			if err := send(dto.ResponsesStreamResponse{
+				Type:        dto.ResponsesOutputTypeItemAdded,
+				OutputIndex: common.GetPointer(index),
+				Item:        item,
+			}); err != nil {
+				return err
+			}
+			return send(dto.ResponsesStreamResponse{
+				Type:         "response.content_part.added",
+				OutputIndex:  common.GetPointer(index),
+				ContentIndex: common.GetPointer(0),
+				ItemID:       item.ID,
+			})
+		case "tool_use":
+			item := &dto.ResponsesOutput{
+				Type:      "function_call",
+				ID:        claudeResponse.ContentBlock.Id,
+				Status:    "in_progress",
+				CallId:    claudeResponse.ContentBlock.Id,
+				Name:      claudeResponse.ContentBlock.Name,
+				Arguments: json.RawMessage(`{}`),
+			}
+			return send(dto.ResponsesStreamResponse{
+				Type:        dto.ResponsesOutputTypeItemAdded,
+				OutputIndex: common.GetPointer(index),
+				Item:        item,
+			})
+		}
+	case "content_block_delta":
+		if claudeResponse.Delta == nil {
+			return nil
+		}
+		index := claudeResponse.GetIndex()
+		if claudeResponse.Delta.Text != nil {
+			return send(dto.ResponsesStreamResponse{
+				Type:         "response.output_text.delta",
+				OutputIndex:  common.GetPointer(index),
+				ContentIndex: common.GetPointer(0),
+				Delta:        *claudeResponse.Delta.Text,
+			})
+		}
+		if claudeResponse.Delta.PartialJson != nil {
+			return send(dto.ResponsesStreamResponse{
+				Type:        "response.function_call_arguments.delta",
+				OutputIndex: common.GetPointer(index),
+				Delta:       *claudeResponse.Delta.PartialJson,
+			})
+		}
+	case "content_block_stop":
+		index := claudeResponse.GetIndex()
+		return send(dto.ResponsesStreamResponse{
+			Type:        dto.ResponsesOutputTypeItemDone,
+			OutputIndex: common.GetPointer(index),
+		})
+	case "message_delta":
+		return nil
+	case "message_stop":
+		completed := &dto.OpenAIResponsesResponse{
+			ID:        responseID,
+			Object:    "response",
+			CreatedAt: int(claudeInfo.Created),
+			Status:    json.RawMessage(`"completed"`),
+			Model:     response.Model,
+			Usage:     buildResponsesUsageFromClaudeUsage(claudeInfo.Usage),
+		}
+		return send(dto.ResponsesStreamResponse{
+			Type:     "response.completed",
+			Response: completed,
+		})
+	}
+
+	return nil
 }
 
 type ClaudeResponseInfo struct {
@@ -905,6 +1514,8 @@ func HandleStreamResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 		if err != nil {
 			logger.LogError(c, "send_stream_response_failed: "+err.Error())
 		}
+	} else if info.RelayFormat == types.RelayFormatOpenAIResponses {
+		return handleClaudeStreamAsResponses(c, info, claudeInfo, &claudeResponse)
 	}
 	return nil
 }
@@ -1004,6 +1615,12 @@ func HandleClaudeResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 		}
 	case types.RelayFormatClaude:
 		responseData = data
+	case types.RelayFormatOpenAIResponses:
+		responsesResponse := ResponseClaude2OpenAIResponses(&claudeResponse, claudeInfo.Usage, claudeInfo.Created)
+		responseData, err = common.Marshal(responsesResponse)
+		if err != nil {
+			return types.NewError(err, types.ErrorCodeBadResponseBody)
+		}
 	}
 
 	if claudeResponse.Usage != nil && claudeResponse.Usage.ServerToolUse != nil && claudeResponse.Usage.ServerToolUse.WebSearchRequests > 0 {
