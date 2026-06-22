@@ -43,6 +43,7 @@ import {
   type DashboardChartPreferences,
   type DashboardFilters,
   type QuotaDataItem,
+  type UserChartsFilters,
 } from './types'
 
 const route = getRouteApi('/_authenticated/dashboard/$section')
@@ -74,6 +75,12 @@ const LazyPerformanceOverview = lazy(() =>
 const LazyUserCharts = lazy(() =>
   import('./components/users/user-charts').then((m) => ({
     default: m.UserCharts,
+  }))
+)
+
+const LazyFlowCharts = lazy(() =>
+  import('./components/flow/flow-charts').then((m) => ({
+    default: m.FlowCharts,
   }))
 )
 
@@ -137,6 +144,9 @@ const SECTION_META: Record<DashboardSectionId, { titleKey: string }> = {
   models: {
     titleKey: 'Model Call Analytics',
   },
+  flow: {
+    titleKey: 'Flow',
+  },
   users: {
     titleKey: 'User Analytics',
   },
@@ -157,6 +167,11 @@ export function Dashboard() {
   const [modelFilters, setModelFilters] = useState<DashboardFilters>(() =>
     buildDefaultDashboardFilters(getSavedChartPreferences())
   )
+  const [userFilters, setUserFilters] = useState<UserChartsFilters>(() => ({
+    timeGranularity: chartPreferences.defaultTimeGranularity,
+    selectedRange: chartPreferences.defaultTimeRangeDays,
+    topUserLimit: 10,
+  }))
 
   const handleFilterChange = useCallback((filters: DashboardFilters) => {
     setModelFilters(filters)
@@ -178,6 +193,11 @@ export function Dashboard() {
     (preferences: DashboardChartPreferences) => {
       setChartPreferences(preferences)
       setModelFilters(buildDefaultDashboardFilters(preferences))
+      setUserFilters((prev) => ({
+        ...prev,
+        timeGranularity: preferences.defaultTimeGranularity,
+        selectedRange: preferences.defaultTimeRangeDays,
+      }))
       saveChartPreferences(preferences)
     },
     []
@@ -294,7 +314,17 @@ export function Dashboard() {
           {activeSection === 'users' && (
             <FadeIn>
               <Suspense fallback={<ModelChartsFallback />}>
-                <LazyUserCharts />
+                <LazyUserCharts
+                  filters={userFilters}
+                  onFiltersChange={setUserFilters}
+                />
+              </Suspense>
+            </FadeIn>
+          )}
+          {activeSection === 'flow' && (
+            <FadeIn>
+              <Suspense fallback={<ModelChartsFallback />}>
+                <LazyFlowCharts filters={modelFilters} />
               </Suspense>
             </FadeIn>
           )}
