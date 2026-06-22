@@ -151,19 +151,6 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     setInputs((inputs) => ({ ...inputs, [name]: value }));
   }, []);
 
-  const handleDateRangeChange = useCallback((dateRange) => {
-    if (!Array.isArray(dateRange) || dateRange.length !== 2) {
-      return;
-    }
-
-    const [startTimestamp, endTimestamp] = dateRange;
-    setInputs((inputs) => ({
-      ...inputs,
-      start_timestamp: startTimestamp,
-      end_timestamp: endTimestamp,
-    }));
-  }, []);
-
   const showSearchModal = useCallback(() => {
     setSearchModalVisible(true);
   }, []);
@@ -346,7 +333,6 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
 
     // 函数
     handleInputChange,
-    handleDateRangeChange,
     showSearchModal,
     handleCloseModal,
     loadQuotaData,

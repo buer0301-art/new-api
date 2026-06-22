@@ -1,19 +1,17 @@
 /* ==================== Tailwind CSS 配置 ==================== */
 @layer tailwind-base, semi, tailwind-components, tailwind-utils;
 
-@layer tailwind-base {
-  @tailwind base;
-}
-
-@layer tailwind-components {
-  @tailwind components;
-}
-
-@layer tailwind-utils {
-  @tailwind utilities;
-}
+@import 'tailwindcss/preflight' layer(tailwind-base);
+@import 'tailwindcss/theme' layer(tailwind-base);
+@import 'tailwindcss/utilities' layer(tailwind-utils);
 
 /* ==================== 全局基础样式 ==================== */
+*,
+::before,
+::after {
+  box-sizing: border-box;
+}
+
 :root {
   --sidebar-width: 180px;
   --sidebar-width-collapsed: 60px;
@@ -24,11 +22,29 @@ body.sidebar-collapsed {
   --sidebar-current-width: var(--sidebar-width-collapsed);
 }
 
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
 body {
   font-family: Lato, 'Helvetica Neue', Arial, Helvetica, 'Microsoft YaHei',
     sans-serif;
   color: var(--semi-color-text-0);
   background-color: var(--semi-color-bg-0);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
 .app-layout {

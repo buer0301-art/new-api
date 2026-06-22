@@ -158,9 +158,6 @@ const Dashboard = () => {
         showSearchModal={dashboardData.showSearchModal}
         refresh={handleRefresh}
         loading={dashboardData.loading}
-        isAdminUser={dashboardData.isAdminUser}
-        inputs={dashboardData.inputs}
-        handleDateRangeChange={dashboardData.handleDateRangeChange}
         t={dashboardData.t}
       />
 

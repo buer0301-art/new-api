@@ -55,27 +55,25 @@ const SearchModal = ({
       centered
     >
       <Form ref={formRef} layout='vertical' className='w-full'>
-        {!isAdminUser &&
-          createFormField(Form.DatePicker, {
-            field: 'start_timestamp',
-            label: t('起始时间'),
-            initValue: start_timestamp,
-            value: start_timestamp,
-            type: 'dateTime',
-            name: 'start_timestamp',
-            onChange: (value) => handleInputChange(value, 'start_timestamp'),
-          })}
+        {createFormField(Form.DatePicker, {
+          field: 'start_timestamp',
+          label: t('起始时间'),
+          initValue: start_timestamp,
+          value: start_timestamp,
+          type: 'dateTime',
+          name: 'start_timestamp',
+          onChange: (value) => handleInputChange(value, 'start_timestamp'),
+        })}
 
-        {!isAdminUser &&
-          createFormField(Form.DatePicker, {
-            field: 'end_timestamp',
-            label: t('结束时间'),
-            initValue: end_timestamp,
-            value: end_timestamp,
-            type: 'dateTime',
-            name: 'end_timestamp',
-            onChange: (value) => handleInputChange(value, 'end_timestamp'),
-          })}
+        {createFormField(Form.DatePicker, {
+          field: 'end_timestamp',
+          label: t('结束时间'),
+          initValue: end_timestamp,
+          value: end_timestamp,
+          type: 'dateTime',
+          name: 'end_timestamp',
+          onChange: (value) => handleInputChange(value, 'end_timestamp'),
+        })}
 
         {createFormField(Form.Select, {
           field: 'data_export_default_time',
