@@ -8,6 +8,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/setting/per_request_pricing"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
@@ -108,7 +109,74 @@ func TestApplyVideoPerRequestPricingMapsResolutionAliases(t *testing.T) {
 	require.Equal(t, 600000, info.PriceData.Quota)
 }
 
+func TestApplyVideoPerRequestPricingPerRequestUnitDoesNotMultiplySeconds(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	setupVideoResolutionPricingRulesWithUnit(t, per_request_pricing.UnitRequest)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/videos", nil)
+	ctx.Set("task_request", relaycommon.TaskSubmitReq{
+		Size:    "1080p",
+		Seconds: "15",
+	})
+
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "video-test-model",
+		TaskRelayInfo:   &relaycommon.TaskRelayInfo{},
+	}
+	priceData := types.PriceData{
+		GroupRatioInfo: types.GroupRatioInfo{GroupRatio: 1},
+	}
+
+	applied, taskErr := applyVideoPerRequestPricing(ctx, info, priceData)
+
+	require.Nil(t, taskErr)
+	require.True(t, applied)
+	require.NotNil(t, info.PriceData.ResolvedPerRequestPricing)
+	require.Equal(t, per_request_pricing.UnitRequest, info.PriceData.ResolvedPerRequestPricing.Unit)
+	require.Equal(t, float64(1), info.PriceData.ResolvedPerRequestPricing.Quantity)
+	require.Equal(t, 40000, info.PriceData.Quota)
+}
+
+func TestApplyVideoPerRequestPricingWorksWithoutBaseModelPrice(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	setupVideoResolutionPricingRulesWithUnit(t, per_request_pricing.UnitSecond)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/video/generations", nil)
+	ctx.Set("group", "default")
+	ctx.Set("task_request", relaycommon.TaskSubmitReq{
+		Model:   "video-test-model",
+		Size:    "1080p",
+		Seconds: "5",
+	})
+
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "video-test-model",
+		UserGroup:       "default",
+		UsingGroup:      "default",
+		TaskRelayInfo:   &relaycommon.TaskRelayInfo{},
+	}
+	priceData := types.PriceData{
+		GroupRatioInfo: helper.HandleGroupRatio(ctx, info),
+	}
+
+	applied, taskErr := applyVideoPerRequestPricing(ctx, info, priceData)
+
+	require.Nil(t, taskErr)
+	require.True(t, applied)
+	require.NotNil(t, info.PriceData.ResolvedPerRequestPricing)
+	require.Equal(t, 200000, info.PriceData.Quota)
+}
+
 func setupVideoResolutionPricingRules(t *testing.T) {
+	t.Helper()
+	setupVideoResolutionPricingRulesWithUnit(t, per_request_pricing.UnitSecond)
+}
+
+func setupVideoResolutionPricingRulesWithUnit(t *testing.T, unit string) {
 	t.Helper()
 
 	original := per_request_pricing.RulesToJSONString()
@@ -119,7 +187,7 @@ func setupVideoResolutionPricingRules(t *testing.T) {
 	rules := map[string]per_request_pricing.PerRequestPriceRule{
 		"video-test-model": {
 			MediaType:         per_request_pricing.MediaTypeVideo,
-			Unit:              per_request_pricing.UnitSecond,
+			Unit:              unit,
 			Prices:            map[string]float64{"480": 0.04, "1K": 0.08, "2K": 0.12, "4K": 0.24},
 			DefaultResolution: "1K",
 			FallbackEnabled:   false,

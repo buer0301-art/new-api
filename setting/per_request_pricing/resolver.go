@@ -63,17 +63,24 @@ func ResolveVideoPricing(model string, rule PerRequestPriceRule, input VideoPric
 	if err != nil {
 		return nil, err
 	}
-	seconds, err := parseSeconds(input.Seconds, input.Duration)
-	if err != nil {
-		return nil, fmt.Errorf("model %s: invalid video seconds %q/duration %d: %w", model, input.Seconds, input.Duration, err)
+	quantity := float64(1)
+	switch rule.Unit {
+	case UnitSecond:
+		seconds, err := parseSeconds(input.Seconds, input.Duration)
+		if err != nil {
+			return nil, fmt.Errorf("model %s: invalid video seconds %q/duration %d: %w", model, input.Seconds, input.Duration, err)
+		}
+		quantity = float64(seconds)
+	case UnitRequest:
+	default:
+		return nil, fmt.Errorf("model %s: invalid video unit %q", model, rule.Unit)
 	}
-	quantity := float64(seconds)
 	priceUSD := unitPrice * quantity
 	quota := billingexpr.QuotaRound(priceUSD * input.GroupRatio * input.QuotaPerUnit)
 	return &types.ResolvedPerRequestPricing{
 		Mode:       "resolution",
 		MediaType:  MediaTypeVideo,
-		Unit:       UnitSecond,
+		Unit:       rule.Unit,
 		Resolution: resolution,
 		UnitPrice:  unitPrice,
 		Quantity:   quantity,
@@ -207,7 +214,7 @@ func videoResolutionAliasCandidates(normalized string) []string {
 	switch normalized {
 	case "480", "480p":
 		return videoResolutionCandidatesFromTier(0, true)
-	case "980", "980p", "980k":
+	case "720", "720p", "980", "980p", "980k":
 		return videoResolutionCandidatesFromTier(1, true)
 	case "1k", "1080", "1080p":
 		return videoResolutionCandidatesFromTier(2, true)
@@ -267,7 +274,7 @@ func videoResolutionCandidatesFromHeight(height int) []string {
 func videoResolutionCandidatesFromTier(tier int, includeHigherTiers bool) []string {
 	tierCandidates := [][]string{
 		{"480", "480p"},
-		{"980", "980p", "980k"},
+		{"720", "720p", "980", "980p", "980k"},
 		{"1k", "1080p", "1080"},
 		{"2k", "1440p", "1440"},
 		{"4k", "2160p", "2160"},

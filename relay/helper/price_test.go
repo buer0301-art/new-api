@@ -168,6 +168,12 @@ func TestModelPriceHelperImageResolutionPricingSkipsNonImageRequest(t *testing.T
 	require.NotContains(t, err.Error(), "per-request pricing")
 }
 
+func TestHasModelBillingConfigAcceptsResolutionPricingRule(t *testing.T) {
+	setupImageResolutionPricingRules(t)
+
+	require.True(t, HasModelBillingConfig("gpt-image-2"))
+}
+
 func setupImageResolutionPricingRules(t *testing.T) {
 	t.Helper()
 

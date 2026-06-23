@@ -188,21 +188,32 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 
 	// 4. 价格计算：基础模型价格
 	info.OriginModelName = modelName
-	priceData, err := helper.ModelPriceHelperPerCall(c, info)
-	if err != nil {
-		return nil, service.TaskErrorWrapper(err, "model_price_error", http.StatusBadRequest)
-	}
 	originResolved := info.PriceData.ResolvedPerRequestPricing
-	info.PriceData = priceData
 	if originResolved != nil {
+		priceData := types.PriceData{
+			GroupRatioInfo: helper.HandleGroupRatio(c, info),
+		}
 		info.PriceData = priceData
 		info.PriceData.ModelPrice = originResolved.PriceUSD
 		info.PriceData.UsePrice = true
 		info.PriceData.Quota = originResolved.Quota
 		info.PriceData.ResolvedPerRequestPricing = originResolved
 		info.PriceData.OtherRatios = nil
-	} else if _, taskErr := applyVideoPerRequestPricing(c, info, priceData); taskErr != nil {
-		return nil, taskErr
+	} else {
+		videoPriceData := types.PriceData{
+			GroupRatioInfo: helper.HandleGroupRatio(c, info),
+		}
+		appliedVideoPricing, taskErr := applyVideoPerRequestPricing(c, info, videoPriceData)
+		if taskErr != nil {
+			return nil, taskErr
+		}
+		if !appliedVideoPricing {
+			priceData, err := helper.ModelPriceHelperPerCall(c, info)
+			if err != nil {
+				return nil, service.TaskErrorWrapper(err, "model_price_error", http.StatusBadRequest)
+			}
+			info.PriceData = priceData
+		}
 	}
 
 	// 5. 计费估算：让适配器根据用户请求提供 OtherRatios（时长、分辨率等）

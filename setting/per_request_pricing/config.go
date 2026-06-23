@@ -17,6 +17,7 @@ const (
 	MediaTypeVideo = "video"
 	UnitImage      = "image"
 	UnitSecond     = "second"
+	UnitRequest    = "request"
 )
 
 type PerRequestPriceRule struct {
@@ -115,8 +116,8 @@ func ValidateRules(rules map[string]PerRequestPriceRule) error {
 				return fmt.Errorf("model %s: unit must be %s for media type %s", model, UnitImage, MediaTypeImage)
 			}
 		case MediaTypeVideo:
-			if rule.Unit != UnitSecond {
-				return fmt.Errorf("model %s: unit must be %s for media type %s", model, UnitSecond, MediaTypeVideo)
+			if rule.Unit != UnitSecond && rule.Unit != UnitRequest {
+				return fmt.Errorf("model %s: unit must be %s or %s for media type %s", model, UnitSecond, UnitRequest, MediaTypeVideo)
 			}
 		default:
 			return fmt.Errorf("model %s: invalid media type %q", model, rule.MediaType)

@@ -157,7 +157,7 @@ const getPriceSummary = (row: ModelRow, t: (key: string) => string) => {
   }
   if (row.billingMode === 'per-request') {
     if (row.perRequestRule) {
-      return summarizePerRequestRule(row.perRequestRule) || t('Unset price')
+      return summarizePerRequestRule(row.perRequestRule, t) || t('Unset price')
     }
     return row.price ? `$${row.price} / ${t('request')}` : t('Unset price')
   }

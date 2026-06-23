@@ -72,7 +72,11 @@ const normalizeRule = (rule) => {
       ? rule.media_type
       : undefined;
   const unit =
-    rule?.unit === 'image' || rule?.unit === 'second' ? rule.unit : undefined;
+    rule?.unit === 'image' ||
+    rule?.unit === 'second' ||
+    rule?.unit === 'request'
+      ? rule.unit
+      : undefined;
   const prices = {};
 
   if (isPlainObject(rule?.prices)) {
@@ -95,7 +99,16 @@ const normalizeRule = (rule) => {
 
   if (mediaType) {
     normalized.media_type = mediaType;
-    normalized.unit = MEDIA_CONFIG[mediaType].unit;
+    if (mediaType === 'image') {
+      normalized.unit = MEDIA_CONFIG[mediaType].unit;
+    } else {
+      normalized.unit =
+        unit === 'second' || unit === 'request'
+          ? unit
+          : MEDIA_CONFIG[mediaType].unit;
+    }
+  } else if (unit) {
+    normalized.unit = unit;
   }
 
   return normalized;
@@ -151,11 +164,16 @@ export function stringifyPerRequestRules(rules) {
   return JSON.stringify(result, null, 2);
 }
 
-export function summarizePerRequestRule(rule) {
+export function summarizePerRequestRule(rule, t) {
   if (!rule || !rule.media_type) return '';
   const mediaType = rule.media_type;
   const mediaLabel = MEDIA_CONFIG[mediaType]?.label || mediaType;
-  const unitLabel = mediaType === 'image' ? 'image' : 's';
+  const unitLabel =
+    mediaType === 'image'
+      ? t?.('张') || 'image'
+      : rule.unit === 'request'
+        ? t?.('次') || 'request'
+        : t?.('秒') || 's';
   const entries = Object.entries(rule.prices || {})
     .map(
       ([resolution, price]) =>
@@ -221,7 +239,12 @@ export function getConfiguredDefaultResolution(mediaType, rule) {
   return MEDIA_CONFIG[mediaType]?.defaultResolution || '';
 }
 
-export function buildRuleFromRows(mediaType, rows, defaultResolution) {
+export function buildRuleFromRows(
+  mediaType,
+  rows,
+  defaultResolution,
+  unit = MEDIA_CONFIG[mediaType]?.unit,
+) {
   const config = MEDIA_CONFIG[mediaType];
   if (!config) return null;
 
@@ -251,7 +274,10 @@ export function buildRuleFromRows(mediaType, rows, defaultResolution) {
 
   return {
     media_type: mediaType,
-    unit: config.unit,
+    unit:
+      mediaType === 'video' && (unit === 'second' || unit === 'request')
+        ? unit
+        : config.unit,
     prices: normalizedPrices,
     default_resolution: fallbackResolution,
     fallback_enabled: false,

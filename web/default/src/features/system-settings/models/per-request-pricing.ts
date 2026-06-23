@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 export const PER_REQUEST_RULES_KEY = 'per_request_pricing.rules'
 
 export type PerRequestMediaType = 'image' | 'video'
-export type PerRequestUnit = 'image' | 'second'
+export type PerRequestUnit = 'image' | 'second' | 'request'
 export type PerRequestSubtype = 'fixed' | 'image' | 'video'
 
 export type PerRequestPriceRule = {
@@ -40,7 +40,7 @@ export type PerRequestPriceRow = {
 }
 
 export const IMAGE_RESOLUTION_REFERENCE = '1K / 2K / 4K'
-export const VIDEO_RESOLUTION_REFERENCE = '480 / 980 / 1K / 2K / 4K'
+export const VIDEO_RESOLUTION_REFERENCE = '480 / 720 / 1080'
 
 const MEDIA_CONFIG: Record<
   PerRequestMediaType,
@@ -97,7 +97,11 @@ function normalizeRule(
       ? rule.media_type
       : undefined
   const unit =
-    rule?.unit === 'image' || rule?.unit === 'second' ? rule.unit : undefined
+    rule?.unit === 'image' ||
+    rule?.unit === 'second' ||
+    rule?.unit === 'request'
+      ? rule.unit
+      : undefined
   const prices: Record<string, number> = {}
   if (isPlainObject(rule?.prices)) {
     Object.entries(rule.prices).forEach(([resolution, value]) => {
@@ -118,7 +122,14 @@ function normalizeRule(
   }
   if (mediaType) {
     normalized.media_type = mediaType
-    normalized.unit = MEDIA_CONFIG[mediaType].unit
+    if (mediaType === 'image') {
+      normalized.unit = MEDIA_CONFIG[mediaType].unit
+    } else {
+      normalized.unit =
+        unit === 'second' || unit === 'request'
+          ? unit
+          : MEDIA_CONFIG[mediaType].unit
+    }
   } else if (unit) {
     normalized.unit = unit
   }
@@ -180,11 +191,19 @@ export function stringifyPerRequestRules(rules: PerRequestRules) {
   return JSON.stringify(result, null, 2)
 }
 
-export function summarizePerRequestRule(rule?: PerRequestPriceRule | null) {
+export function summarizePerRequestRule(
+  rule?: PerRequestPriceRule | null,
+  t?: (key: string) => string
+) {
   if (!rule || !rule.media_type) return ''
   const mediaType = rule.media_type
   const mediaLabel = getMediaLabel(mediaType)
-  const unitLabel = mediaType === 'image' ? 'image' : 's'
+  const unitLabel =
+    mediaType === 'image'
+      ? t?.('image') || 'image'
+      : rule.unit === 'request'
+        ? t?.('request') || 'request'
+        : t?.('second') || 's'
   const entries = Object.entries(rule.prices || {})
     .map(([resolution, price]) => {
       return `${resolution} $${Number(price)
@@ -239,7 +258,8 @@ export function getConfiguredDefaultResolution(
 export function buildRuleFromRows(
   mediaType: PerRequestMediaType,
   rows: PerRequestPriceRow[],
-  defaultResolution: string
+  defaultResolution: string,
+  unit: PerRequestUnit = MEDIA_CONFIG[mediaType].unit
 ): PerRequestPriceRule | null {
   const config = MEDIA_CONFIG[mediaType]
   const normalizedPrices: Record<string, number> = {}
@@ -268,7 +288,10 @@ export function buildRuleFromRows(
 
   return {
     media_type: mediaType,
-    unit: config.unit,
+    unit:
+      mediaType === 'video' && (unit === 'second' || unit === 'request')
+        ? unit
+        : config.unit,
     prices: normalizedPrices,
     default_resolution: fallbackResolution,
     fallback_enabled: false,

@@ -47,6 +47,7 @@ func TestResolveVideoPricingMapsCommonResolutionAliases(t *testing.T) {
 	}{
 		{name: "480p label", size: "480p", resolution: "480", unitPrice: 0.04},
 		{name: "tiny pixel size", size: "210*120", resolution: "480", unitPrice: 0.04},
+		{name: "720p label", size: "720p", resolution: "980", unitPrice: 0.06},
 		{name: "980p label", size: "980p", resolution: "980", unitPrice: 0.06},
 		{name: "1080p label", size: "1080p", resolution: "1K", unitPrice: 0.08},
 		{name: "1440p label", size: "1440p", resolution: "2K", unitPrice: 0.12},
@@ -404,6 +405,49 @@ func TestResolveVideoPricingSeconds(t *testing.T) {
 	}
 	if resolved.Quota != 1200000 {
 		t.Fatalf("unexpected quota: %+v", resolved)
+	}
+}
+
+func TestResolveVideoPricingPerRequestUnitCountsOnce(t *testing.T) {
+	rule := PerRequestPriceRule{
+		MediaType:         MediaTypeVideo,
+		Unit:              UnitRequest,
+		Prices:            map[string]float64{"1080": 1},
+		DefaultResolution: "1080",
+		FallbackEnabled:   false,
+	}
+	resolved, err := ResolveVideoPricing("test-model", rule, VideoPricingInput{
+		Size:         "1080p",
+		Seconds:      "15",
+		GroupRatio:   1,
+		QuotaPerUnit: 500000,
+	})
+	if err != nil {
+		t.Fatalf("ResolveVideoPricing error: %v", err)
+	}
+	if resolved.Unit != UnitRequest || resolved.Quantity != 1 || resolved.PriceUSD != 1 || resolved.Quota != 500000 {
+		t.Fatalf("unexpected resolved pricing: %+v", resolved)
+	}
+}
+
+func TestResolveVideoPricingPerRequestUnitDoesNotRequireDuration(t *testing.T) {
+	rule := PerRequestPriceRule{
+		MediaType:         MediaTypeVideo,
+		Unit:              UnitRequest,
+		Prices:            map[string]float64{"720": 0.5},
+		DefaultResolution: "720",
+		FallbackEnabled:   false,
+	}
+	resolved, err := ResolveVideoPricing("test-model", rule, VideoPricingInput{
+		Size:         "720p",
+		GroupRatio:   1,
+		QuotaPerUnit: 500000,
+	})
+	if err != nil {
+		t.Fatalf("ResolveVideoPricing error: %v", err)
+	}
+	if resolved.Quantity != 1 || resolved.PriceUSD != 0.5 {
+		t.Fatalf("unexpected resolved pricing: %+v", resolved)
 	}
 }
 

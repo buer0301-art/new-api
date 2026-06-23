@@ -251,6 +251,9 @@ func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types
 }
 
 func HasModelBillingConfig(modelName string) bool {
+	if _, ok := per_request_pricing.GetRule(modelName); ok {
+		return true
+	}
 	if _, ok := ratio_setting.GetModelPrice(modelName, false); ok {
 		return true
 	}

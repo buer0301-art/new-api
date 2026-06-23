@@ -100,8 +100,10 @@ const MEDIA_BY_SUBTYPE = {
 
 const RESOLUTION_REFERENCES = {
   image: '1K / 2K / 4K',
-  video: '480 / 980 / 1K / 2K / 4K',
+  video: '480 / 720 / 1080',
 };
+
+const DEFAULT_VIDEO_UNIT = 'request';
 
 const PerRequestPricingEditor = ({
   model,
@@ -118,6 +120,7 @@ const PerRequestPricingEditor = ({
     createDefaultPriceRows('video'),
   );
   const [videoDefault, setVideoDefault] = useState('');
+  const [videoUnit, setVideoUnit] = useState(DEFAULT_VIDEO_UNIT);
 
   useEffect(() => {
     const rule = model?.perRequestRule;
@@ -128,16 +131,18 @@ const PerRequestPricingEditor = ({
     } else if (rule?.media_type === 'video') {
       setVideoRows(createPriceRowsFromRule('video', rule));
       setVideoDefault(getConfiguredDefaultResolution('video', rule));
+      setVideoUnit(rule.unit === 'second' ? 'second' : DEFAULT_VIDEO_UNIT);
     } else {
       setImageRows(createDefaultPriceRows('image'));
       setImageDefault(getConfiguredDefaultResolution('image', null));
       setVideoRows(createDefaultPriceRows('video'));
       setVideoDefault(getConfiguredDefaultResolution('video', null));
+      setVideoUnit(DEFAULT_VIDEO_UNIT);
     }
   }, [model?.name]);
 
-  const syncRule = (mediaType, nextRows, nextDefault) => {
-    onRuleChange(buildRuleFromRows(mediaType, nextRows, nextDefault));
+  const syncRule = (mediaType, nextRows, nextDefault, unit) => {
+    onRuleChange(buildRuleFromRows(mediaType, nextRows, nextDefault, unit));
   };
 
   const handleSubtypeChange = (value) => {
@@ -152,6 +157,7 @@ const PerRequestPricingEditor = ({
       mediaType,
       mediaType === 'image' ? imageRows : videoRows,
       mediaType === 'image' ? imageDefault : videoDefault,
+      mediaType === 'video' ? videoUnit : undefined,
     );
   };
 
@@ -161,6 +167,8 @@ const PerRequestPricingEditor = ({
     defaultResolution,
     setRows,
     setDefault,
+    unit,
+    setUnit,
   ) => {
     const selectableRows = rows
       .filter((row) => row.enabled && row.resolution.trim())
@@ -168,7 +176,7 @@ const PerRequestPricingEditor = ({
 
     const updateRows = (nextRows, nextDefault = defaultResolution) => {
       setRows(nextRows);
-      syncRule(mediaType, nextRows, nextDefault);
+      syncRule(mediaType, nextRows, nextDefault, unit);
     };
 
     const normalizeDefault = (nextRows) => {
@@ -198,7 +206,9 @@ const PerRequestPricingEditor = ({
           <div className='text-xs text-gray-500 mt-1'>
             {mediaType === 'image'
               ? t('每个分辨率按次计价，价格单位为 $/张。')
-              : t('每个分辨率按秒计价，价格单位为 $/秒。')}
+              : unit === 'second'
+                ? t('每个分辨率按秒计价，价格单位为 $/秒。')
+                : t('每个分辨率按次计价，价格单位为 $/次。')}
           </div>
           <div className='text-xs text-gray-500 mt-1'>
             {t(
@@ -209,6 +219,27 @@ const PerRequestPricingEditor = ({
             )}
           </div>
         </div>
+
+        {mediaType === 'video' && unit && setUnit ? (
+          <div className='mb-3'>
+            <div className='mb-1 font-medium text-gray-700'>
+              {t('计费单位')}
+            </div>
+            <RadioGroup
+              type='button'
+              value={unit}
+              onChange={(event) => {
+                const nextUnit = event.target.value;
+                if (nextUnit !== 'request' && nextUnit !== 'second') return;
+                setUnit(nextUnit);
+                syncRule(mediaType, rows, defaultResolution, nextUnit);
+              }}
+            >
+              <Radio value='request'>{t('按次')}</Radio>
+              <Radio value='second'>{t('按秒')}</Radio>
+            </RadioGroup>
+          </div>
+        ) : null}
 
         <div style={{ display: 'grid', gap: 8 }}>
           {rows.map((row) => (
@@ -252,7 +283,13 @@ const PerRequestPricingEditor = ({
               <Input
                 value={row.price}
                 placeholder='0.01'
-                suffix={mediaType === 'image' ? t('$/张') : t('$/秒')}
+                suffix={
+                  mediaType === 'image'
+                    ? t('$/张')
+                    : unit === 'second'
+                      ? t('$/秒')
+                      : t('$/次')
+                }
                 disabled={!row.enabled}
                 onChange={(value) => {
                   if (!/^(\d+(\.\d*)?|\.\d*)?$/.test(value)) return;
@@ -293,7 +330,7 @@ const PerRequestPricingEditor = ({
               onChange={(value) => {
                 if (!value) return;
                 setDefault(value);
-                syncRule(mediaType, rows, value);
+                syncRule(mediaType, rows, value, unit);
               }}
             >
               {selectableRows.map((value) => (
@@ -306,7 +343,15 @@ const PerRequestPricingEditor = ({
         </Space>
 
         <div className='mt-2 text-xs text-gray-500'>
-          {t('未配置的分辨率会拒绝请求，不会自动套用其它档位。')}
+          {mediaType === 'video' && unit === 'request'
+            ? t('视频任务会按匹配分辨率每次请求计费一次。')
+            : null}
+          {mediaType === 'video' && unit === 'second'
+            ? t('视频任务会按匹配分辨率和生成秒数计费。')
+            : null}
+          {mediaType !== 'video'
+            ? t('未配置的分辨率会拒绝请求，不会自动套用其它档位。')
+            : null}
         </div>
       </Card>
     );
@@ -357,6 +402,8 @@ const PerRequestPricingEditor = ({
             videoDefault,
             setVideoRows,
             setVideoDefault,
+            videoUnit,
+            setVideoUnit,
           )
         : null}
     </>

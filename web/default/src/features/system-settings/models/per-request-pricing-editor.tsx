@@ -43,6 +43,7 @@ import {
   type PerRequestPriceRule,
   type PerRequestPriceRow,
   type PerRequestSubtype,
+  type PerRequestUnit,
   VIDEO_RESOLUTION_REFERENCE,
 } from './per-request-pricing'
 
@@ -65,6 +66,8 @@ const MEDIA_BY_SUBTYPE: Record<
 }
 
 const numericDraftRegex = /^(\d+(\.\d*)?|\.\d*)?$/
+type VideoBillingUnit = Extract<PerRequestUnit, 'request' | 'second'>
+const DEFAULT_VIDEO_UNIT: VideoBillingUnit = 'request'
 
 export function PerRequestPricingEditor({
   name,
@@ -84,6 +87,8 @@ export function PerRequestPricingEditor({
     createDefaultPriceRows('video')
   )
   const [videoDefault, setVideoDefault] = useState('')
+  const [videoUnit, setVideoUnit] =
+    useState<VideoBillingUnit>(DEFAULT_VIDEO_UNIT)
 
   useEffect(() => {
     if (rule?.media_type === 'image') {
@@ -92,20 +97,23 @@ export function PerRequestPricingEditor({
     } else if (rule?.media_type === 'video') {
       setVideoRows(createPriceRowsFromRule('video', rule))
       setVideoDefault(getConfiguredDefaultResolution('video', rule))
+      setVideoUnit(rule.unit === 'second' ? 'second' : DEFAULT_VIDEO_UNIT)
     } else {
       setImageRows(createDefaultPriceRows('image'))
       setImageDefault(getConfiguredDefaultResolution('image', null))
       setVideoRows(createDefaultPriceRows('video'))
       setVideoDefault(getConfiguredDefaultResolution('video', null))
+      setVideoUnit(DEFAULT_VIDEO_UNIT)
     }
   }, [name])
 
   const syncRule = (
     mediaType: PerRequestMediaType,
     nextRows: PerRequestPriceRow[],
-    nextDefault: string
+    nextDefault: string,
+    unit?: PerRequestUnit
   ) => {
-    const nextRule = buildRuleFromRows(mediaType, nextRows, nextDefault)
+    const nextRule = buildRuleFromRows(mediaType, nextRows, nextDefault, unit)
     onRuleChange(nextRule)
   }
 
@@ -120,7 +128,8 @@ export function PerRequestPricingEditor({
     syncRule(
       mediaType,
       mediaType === 'image' ? imageRows : videoRows,
-      mediaType === 'image' ? imageDefault : videoDefault
+      mediaType === 'image' ? imageDefault : videoDefault,
+      mediaType === 'video' ? videoUnit : undefined
     )
   }
 
@@ -129,7 +138,9 @@ export function PerRequestPricingEditor({
     rows: PerRequestPriceRow[],
     defaultResolution: string,
     setRows: (next: PerRequestPriceRow[]) => void,
-    setDefault: (next: string) => void
+    setDefault: (next: string) => void,
+    unit?: VideoBillingUnit,
+    setUnit?: (next: VideoBillingUnit) => void
   ) => {
     const selectableRows = rows
       .filter((row) => row.enabled && row.resolution.trim())
@@ -140,7 +151,7 @@ export function PerRequestPricingEditor({
       nextDefault = defaultResolution
     ) => {
       setRows(nextRows)
-      syncRule(mediaType, nextRows, nextDefault)
+      syncRule(mediaType, nextRows, nextDefault, unit)
     }
 
     const normalizeDefault = (nextRows: PerRequestPriceRow[]) => {
@@ -166,6 +177,25 @@ export function PerRequestPricingEditor({
             { resolutions: reference }
           )}
         </div>
+
+        {mediaType === 'video' && unit && setUnit ? (
+          <div className='flex flex-wrap items-center gap-3'>
+            <Label className='text-sm'>{t('Billing unit')}</Label>
+            <Tabs
+              value={unit}
+              onValueChange={(next) => {
+                if (next !== 'request' && next !== 'second') return
+                setUnit(next)
+                syncRule(mediaType, rows, defaultResolution, next)
+              }}
+            >
+              <TabsList>
+                <TabsTrigger value='request'>{t('Per request')}</TabsTrigger>
+                <TabsTrigger value='second'>{t('Per second')}</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+        ) : null}
 
         <div className='rounded-lg border'>
           {rows.map((row) => (
@@ -255,7 +285,7 @@ export function PerRequestPricingEditor({
             onValueChange={(next) => {
               if (!next) return
               setDefault(next)
-              syncRule(mediaType, rows, next)
+              syncRule(mediaType, rows, next, unit)
             }}
           >
             <SelectTrigger className='w-[140px]'>
@@ -274,7 +304,13 @@ export function PerRequestPricingEditor({
         </div>
 
         <div className='text-muted-foreground text-xs'>
-          {t('Unknown resolution: Reject request')}
+          {mediaType === 'video' && unit === 'request'
+            ? t('Video tasks are charged once per request at the matched resolution.')
+            : null}
+          {mediaType === 'video' && unit === 'second'
+            ? t('Video tasks are charged per generated second at the matched resolution.')
+            : null}
+          {mediaType !== 'video' ? t('Unknown resolution: Reject request') : null}
         </div>
       </div>
     )
@@ -327,7 +363,9 @@ export function PerRequestPricingEditor({
           videoRows,
           videoDefault,
           setVideoRows,
-          setVideoDefault
+          setVideoDefault,
+          videoUnit,
+          setVideoUnit
         )}
     </div>
   )

@@ -333,7 +333,7 @@ export const buildSummaryText = (model, t) => {
   }
 
   if (model.billingMode === 'per-request' && model.perRequestRule) {
-    return summarizePerRequestRule(model.perRequestRule) || t('未设置价格');
+    return summarizePerRequestRule(model.perRequestRule, t) || t('未设置价格');
   }
 
   if (model.billingMode === 'per-request' && hasValue(model.fixedPrice)) {
@@ -536,7 +536,7 @@ export const buildPreviewRows = (model, t) => {
         {
           key: PER_REQUEST_RULES_KEY,
           label: PER_REQUEST_RULES_KEY,
-          value: summarizePerRequestRule(model.perRequestRule) || t('空'),
+          value: summarizePerRequestRule(model.perRequestRule, t) || t('空'),
         },
       ];
     }

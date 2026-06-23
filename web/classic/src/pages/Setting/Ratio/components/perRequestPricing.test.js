@@ -54,4 +54,38 @@ describe('per-request pricing resolution normalization', () => {
 
     assert.equal(rule?.default_resolution, '180*640');
   });
+
+  test('buildRuleFromRows preserves the selected video billing unit', () => {
+    const rule = buildRuleFromRows(
+      'video',
+      [
+        {
+          id: 'full-hd',
+          resolution: '1080',
+          price: '1',
+          enabled: true,
+        },
+      ],
+      '1080',
+      'request',
+    );
+
+    assert.equal(rule?.unit, 'request');
+  });
+
+  test('stringify keeps video request unit rules', () => {
+    const serialized = stringifyPerRequestRules({
+      'video-test-model': {
+        media_type: 'video',
+        unit: 'request',
+        prices: {
+          1080: 1,
+        },
+        default_resolution: '1080',
+        fallback_enabled: false,
+      },
+    });
+
+    assert.equal(JSON.parse(serialized)['video-test-model'].unit, 'request');
+  });
 });

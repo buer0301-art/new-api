@@ -325,7 +325,7 @@ function buildPreviewRows(
         {
           key: 'price',
           label: t('Resolution pricing'),
-          value: summarizePerRequestRule(perRequestRule) || t('Empty'),
+          value: summarizePerRequestRule(perRequestRule, t) || t('Empty'),
           multiline: true,
         },
       ]
