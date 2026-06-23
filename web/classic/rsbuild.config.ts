@@ -1,4 +1,5 @@
 import path from 'path'
+import fs from 'fs'
 import { createRequire } from 'module'
 import { fileURLToPath } from 'url'
 import { defineConfig, loadEnv } from '@rsbuild/core'
@@ -6,12 +7,47 @@ import { pluginReact } from '@rsbuild/plugin-react'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url)
-const semiUiDir = path.resolve(
-  path.dirname(require.resolve('@douyinfe/semi-ui')),
-  '../..',
+const semiUiDir = fs.realpathSync(
+  path.resolve(path.dirname(require.resolve('@douyinfe/semi-ui')), '../..'),
 )
-const semiUiDependenciesDir = path.resolve(semiUiDir, '../..')
-const semiDateFnsDir = path.resolve(semiUiDependenciesDir, 'date-fns')
+const semiDateFnsDir = path.dirname(
+  require.resolve('date-fns/package.json', { paths: [semiUiDir] }),
+)
+const resolvePackageDir = (specifier: string) =>
+  fs.realpathSync(path.dirname(require.resolve(`${specifier}/package.json`)))
+const resolveVisActorVChartDep = (specifier: string) =>
+  fs.realpathSync(
+    path.resolve(
+      resolvePackageDir('@visactor/vchart'),
+      'node_modules',
+      specifier,
+    ),
+  )
+const classicVisActorAlias = {
+  '@visactor/react-vchart': resolvePackageDir('@visactor/react-vchart'),
+  '@visactor/vchart': resolvePackageDir('@visactor/vchart'),
+  '@visactor/vchart-semi-theme': resolvePackageDir(
+    '@visactor/vchart-semi-theme',
+  ),
+  '@visactor/vchart-theme-utils': resolvePackageDir(
+    '@visactor/vchart-theme-utils',
+  ),
+  '@visactor/vdataset': resolveVisActorVChartDep('@visactor/vdataset'),
+  '@visactor/vrender-components': resolveVisActorVChartDep(
+    '@visactor/vrender-components',
+  ),
+  '@visactor/vrender-core': resolveVisActorVChartDep(
+    '@visactor/vrender-core',
+  ),
+  '@visactor/vrender-kits': resolveVisActorVChartDep(
+    '@visactor/vrender-kits',
+  ),
+  '@visactor/vscale': resolveVisActorVChartDep('@visactor/vscale'),
+  '@visactor/vutils': resolveVisActorVChartDep('@visactor/vutils'),
+  '@visactor/vutils-extension': resolveVisActorVChartDep(
+    '@visactor/vutils-extension',
+  ),
+}
 
 export default defineConfig(({ envMode }) => {
   const env = loadEnv({ mode: envMode, prefixes: ['VITE_'] })
@@ -50,6 +86,7 @@ export default defineConfig(({ envMode }) => {
           'dist/css/semi.css',
         ),
         'date-fns': semiDateFnsDir,
+        ...classicVisActorAlias,
       },
     },
     html: {

@@ -256,11 +256,11 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
 
   const handleSearchConfirm = useCallback(
     async (updateChartDataCallback) => {
+      setSearchModalVisible(false);
       const data = await refresh();
       if (data && data.length > 0 && updateChartDataCallback) {
         updateChartDataCallback(data);
       }
-      setSearchModalVisible(false);
     },
     [refresh],
   );
