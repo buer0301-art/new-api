@@ -378,6 +378,38 @@ export const useLogsData = () => {
       return `${chain.join(' -> ')}`;
     };
 
+    const formatVideoDetail = (other) => {
+      if (other?.media_type !== 'video') {
+        return '';
+      }
+      const parts = [];
+      if (other.video_duration !== undefined && other.video_duration !== null && other.video_duration !== '') {
+        parts.push(`${t('视频长度')} ${other.video_duration}s`);
+      }
+      if (other.video_resolution) {
+        parts.push(`${t('分辨率')} ${other.video_resolution}`);
+      }
+      if (other.video_ratio) {
+        parts.push(`${t('视频比例')} ${other.video_ratio}`);
+      }
+      if (other.video_size) {
+        parts.push(`${t('视频尺寸')} ${other.video_size}`);
+      }
+      if (other.video_fps) {
+        parts.push(`${t('帧率')} ${other.video_fps}`);
+      }
+      if (other.video_frames) {
+        parts.push(`${t('帧数')} ${other.video_frames}`);
+      }
+      if (other.video_seed) {
+        parts.push(`Seed ${other.video_seed}`);
+      }
+      if (other.video_service_tier) {
+        parts.push(`Service Tier ${other.video_service_tier}`);
+      }
+      return parts.join('，');
+    };
+
     let expandDatesLocal = {};
     for (let i = 0; i < logs.length; i++) {
       logs[i].timestamp2string = timestamp2string(logs[i].created_at);
@@ -437,9 +469,10 @@ export const useLogsData = () => {
           });
         }
         if (logs[i]?.content) {
+          const videoDetail = formatVideoDetail(other);
           expandDataLocal.push({
             key: t('其他详情'),
-            value: logs[i].content,
+            value: videoDetail ? `${logs[i].content}，${videoDetail}` : logs[i].content,
           });
         }
         if (isAdminUser && other?.reject_reason) {

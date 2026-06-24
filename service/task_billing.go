@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -52,6 +53,7 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 		other["upstream_model_name"] = info.UpstreamModelName
 	}
 	addResolvedPerRequestPricingOther(other, info.PriceData.ResolvedPerRequestPricing)
+	addVideoTaskRequestOther(c, other)
 	model.RecordConsumeLog(c, info.UserId, model.RecordConsumeLogParams{
 		ChannelId: info.ChannelId,
 		ModelName: info.OriginModelName,
@@ -78,6 +80,97 @@ func addResolvedPerRequestPricingOther(other map[string]interface{}, resolved *t
 	other["quantity"] = resolved.Quantity
 	other["price_usd"] = resolved.PriceUSD
 	other["resolved_quota"] = resolved.Quota
+}
+
+func addVideoTaskRequestOther(c *gin.Context, other map[string]interface{}) {
+	if c == nil || c.Request == nil || c.Request.URL == nil || other == nil {
+		return
+	}
+	path := c.Request.URL.Path
+	if !strings.HasPrefix(path, "/v1/video/") && !strings.HasPrefix(path, "/v1/videos/") {
+		return
+	}
+	req, err := relaycommon.GetTaskRequest(c)
+	if err != nil {
+		return
+	}
+
+	other["media_type"] = "video"
+	if duration := taskVideoDuration(req); duration > 0 {
+		other["video_duration"] = duration
+	}
+	if strings.TrimSpace(req.Size) != "" {
+		other["video_size"] = strings.TrimSpace(req.Size)
+	}
+	if value := metadataStringValue(req.Metadata, "resolution"); value != "" {
+		other["video_resolution"] = value
+	}
+	if value := firstMetadataStringValue(req.Metadata, "ratio", "aspect_ratio", "aspectRatio"); value != "" {
+		other["video_ratio"] = value
+	}
+	if value := firstMetadataStringValue(req.Metadata, "framespersecond", "frames_per_second", "fps"); value != "" {
+		other["video_fps"] = value
+	}
+	if value := metadataStringValue(req.Metadata, "frames"); value != "" {
+		other["video_frames"] = value
+	}
+	if value := metadataStringValue(req.Metadata, "seed"); value != "" {
+		other["video_seed"] = value
+	}
+	if value := metadataStringValue(req.Metadata, "service_tier"); value != "" {
+		other["video_service_tier"] = value
+	}
+}
+
+func taskVideoDuration(req relaycommon.TaskSubmitReq) int {
+	if strings.TrimSpace(req.Seconds) != "" {
+		if seconds, err := strconv.Atoi(strings.TrimSpace(req.Seconds)); err == nil && seconds > 0 {
+			return seconds
+		}
+	}
+	if req.Duration > 0 {
+		return req.Duration
+	}
+	if value := metadataPositiveIntValue(req.Metadata, "duration", "durationSeconds", "duration_seconds"); value > 0 {
+		return value
+	}
+	return 0
+}
+
+func metadataPositiveIntValue(metadata map[string]interface{}, keys ...string) int {
+	for _, key := range keys {
+		raw := metadataStringValue(metadata, key)
+		if raw == "" {
+			continue
+		}
+		if value, err := strconv.Atoi(raw); err == nil && value > 0 {
+			return value
+		}
+		if value, err := strconv.ParseFloat(raw, 64); err == nil && value > 0 {
+			return int(value)
+		}
+	}
+	return 0
+}
+
+func firstMetadataStringValue(metadata map[string]interface{}, keys ...string) string {
+	for _, key := range keys {
+		if value := metadataStringValue(metadata, key); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func metadataStringValue(metadata map[string]interface{}, key string) string {
+	if metadata == nil {
+		return ""
+	}
+	value, ok := metadata[key]
+	if !ok || value == nil {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(value))
 }
 
 // ---------------------------------------------------------------------------
@@ -141,7 +234,7 @@ func taskBillingOther(task *model.Task) map[string]interface{} {
 			other["model_ratio"] = bc.ModelRatio
 		}
 		other["group_ratio"] = bc.GroupRatio
-		if len(bc.OtherRatios) > 0 {
+		if !bc.PerCallBilling && len(bc.OtherRatios) > 0 {
 			for k, v := range bc.OtherRatios {
 				other[k] = v
 			}
@@ -300,19 +393,10 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 		finalGroupRatio = groupRatio
 	}
 
-	// 计算 OtherRatios 乘积（视频折扣、时长等）
-	otherMultiplier := 1.0
-	if bc := task.PrivateData.BillingContext; bc != nil {
-		for _, r := range bc.OtherRatios {
-			if r != 1.0 && r > 0 {
-				otherMultiplier *= r
-			}
-		}
-	}
+	// 计算实际应扣费额度: totalTokens * modelRatio * groupRatio。
+	// totalTokens 已经是上游返回的实际用量，不能再乘视频 seconds/size。
+	actualQuota := int(float64(totalTokens) * modelRatio * finalGroupRatio)
 
-	// 计算实际应扣费额度: totalTokens * modelRatio * groupRatio * otherMultiplier
-	actualQuota := int(float64(totalTokens) * modelRatio * finalGroupRatio * otherMultiplier)
-
-	reason := fmt.Sprintf("token重算：tokens=%d, modelRatio=%.2f, groupRatio=%.2f, otherMultiplier=%.4f", totalTokens, modelRatio, finalGroupRatio, otherMultiplier)
+	reason := fmt.Sprintf("token重算：tokens=%d, modelRatio=%.2f, groupRatio=%.2f", totalTokens, modelRatio, finalGroupRatio)
 	RecalculateTaskQuota(ctx, task, actualQuota, reason)
 }

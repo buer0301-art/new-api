@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -11,7 +12,9 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
+	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -210,6 +213,75 @@ func TestTaskBillingOther_IncludesResolvedPerRequestPricing(t *testing.T) {
 	assert.Equal(t, float64(10), other["quantity"])
 	assert.Equal(t, 2.4, other["price_usd"])
 	assert.Equal(t, 1200000, other["resolved_quota"])
+}
+
+func TestTaskBillingOther_SkipsOtherRatiosForPerCallBilling(t *testing.T) {
+	task := makeTask(1, 1, 150000, 0, BillingSourceWallet, 0)
+	task.PrivateData.BillingContext.PerCallBilling = true
+	task.PrivateData.BillingContext.ModelPrice = 0.3
+	task.PrivateData.BillingContext.OtherRatios = map[string]float64{
+		"seconds": 15,
+		"size":    1,
+	}
+
+	other := taskBillingOther(task)
+
+	assert.Equal(t, 0.3, other["model_price"])
+	assert.NotContains(t, other, "seconds")
+	assert.NotContains(t, other, "size")
+}
+
+func TestLogTaskConsumption_IncludesVideoRequestMetadata(t *testing.T) {
+	truncate(t)
+	gin.SetMode(gin.TestMode)
+	seedUser(t, 1, 10000)
+	seedChannel(t, 3)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/video/generations", nil)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = req
+	ctx.Set("task_request", relaycommon.TaskSubmitReq{
+		Model:    "doubao-seedance-2-0-fast-260128",
+		Size:     "720x1280",
+		Duration: 5,
+		Metadata: map[string]interface{}{
+			"resolution": "1080p",
+			"ratio":      "9:16",
+		},
+	})
+
+	info := &relaycommon.RelayInfo{
+		UserId:          1,
+		TokenId:         1,
+		UsingGroup:      "default",
+		OriginModelName: "doubao-seedance-2-0-fast-260128",
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelId: 3,
+		},
+		TaskRelayInfo: &relaycommon.TaskRelayInfo{
+			Action: "textGenerate",
+		},
+		PriceData: types.PriceData{
+			ModelPrice: 25,
+			Quota:      3125000,
+			GroupRatioInfo: types.GroupRatioInfo{
+				GroupRatio: 1,
+			},
+		},
+	}
+
+	LogTaskConsumption(ctx, info)
+
+	log := getLastLog(t)
+	require.NotNil(t, log)
+	var other map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(log.Other), &other))
+	assert.Equal(t, true, other["is_task"])
+	assert.Equal(t, "video", other["media_type"])
+	assert.Equal(t, float64(5), other["video_duration"])
+	assert.Equal(t, "720x1280", other["video_size"])
+	assert.Equal(t, "1080p", other["video_resolution"])
+	assert.Equal(t, "9:16", other["video_ratio"])
 }
 
 // ===========================================================================
@@ -741,4 +813,60 @@ func TestSettle_NonPerCallBilling_AppliesAdaptorAdjustment(t *testing.T) {
 	log := getLastLog(t)
 	require.NotNil(t, log)
 	assert.Equal(t, model.LogTypeRefund, log.Type)
+}
+
+func TestExtractVideoTaskUsageTokensFromWrappedNewAPIResponse(t *testing.T) {
+	body := []byte(`{
+		"code": "success",
+		"data": {
+			"status": "SUCCESS",
+			"data": {
+				"usage": {
+					"completion_tokens": 108900,
+					"total_tokens": 108900
+				}
+			}
+		}
+	}`)
+
+	completionTokens, totalTokens := extractVideoTaskUsageTokens(body)
+
+	assert.Equal(t, 108900, completionTokens)
+	assert.Equal(t, 108900, totalTokens)
+}
+
+func TestRecalculateTaskQuotaByTokensIgnoresOtherRatios(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	const userID, tokenID, channelID = 33, 33, 33
+	const initQuota, tokenRemain = 10000, 8000
+
+	seedUser(t, userID, initQuota)
+	seedToken(t, tokenID, userID, "sk-token-recalc", tokenRemain)
+	seedChannel(t, channelID)
+	originalRatios := ratio_setting.ModelRatio2JSONString()
+	require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(`{"test-model":1.25}`))
+	t.Cleanup(func() {
+		_ = ratio_setting.UpdateModelRatioByJSONString(originalRatios)
+	})
+
+	task := makeTask(userID, channelID, 5000, tokenID, BillingSourceWallet, 0)
+	task.PrivateData.BillingContext.ModelRatio = 1.25
+	task.PrivateData.BillingContext.OtherRatios = map[string]float64{
+		"seconds": 4,
+		"size":    1,
+	}
+	require.NoError(t, model.DB.Create(task).Error)
+
+	RecalculateTaskQuotaByTokens(ctx, task, 1000)
+
+	assert.Equal(t, 1250, task.Quota)
+	assert.Equal(t, initQuota+(5000-1250), getUserQuota(t, userID))
+	assert.Equal(t, tokenRemain+(5000-1250), getTokenRemainQuota(t, tokenID))
+
+	log := getLastLog(t)
+	require.NotNil(t, log)
+	assert.Equal(t, model.LogTypeRefund, log.Type)
+	assert.Equal(t, 3750, log.Quota)
 }

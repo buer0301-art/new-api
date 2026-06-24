@@ -171,6 +171,72 @@ func TestApplyVideoPerRequestPricingWorksWithoutBaseModelPrice(t *testing.T) {
 	require.Equal(t, 200000, info.PriceData.Quota)
 }
 
+func TestShouldApplyTaskOtherRatiosSkipsFixedPriceTask(t *testing.T) {
+	info := &relaycommon.RelayInfo{
+		PriceData: types.PriceData{
+			UsePrice: true,
+			Quota:    int(common.QuotaPerUnit),
+			OtherRatios: map[string]float64{
+				"seconds": 15,
+				"size":    1,
+			},
+		},
+	}
+
+	require.False(t, shouldApplyTaskOtherRatios(info, "grok-imagine-video"))
+}
+
+func TestShouldApplyTaskOtherRatiosSkipsRatioPricedTask(t *testing.T) {
+	info := &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelType: constant.ChannelTypeOpenAI,
+		},
+		PriceData: types.PriceData{
+			UsePrice: false,
+			Quota:    int(common.QuotaPerUnit),
+			OtherRatios: map[string]float64{
+				"seconds": 15,
+			},
+		},
+	}
+
+	require.False(t, shouldApplyTaskOtherRatios(info, "sora-2"))
+}
+
+func TestShouldApplyTaskOtherRatiosKeepsProviderDurationPricing(t *testing.T) {
+	info := &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelType: constant.ChannelTypeAli,
+		},
+		PriceData: types.PriceData{
+			UsePrice: false,
+			Quota:    int(common.QuotaPerUnit),
+			OtherRatios: map[string]float64{
+				"seconds": 15,
+			},
+		},
+	}
+
+	require.True(t, shouldApplyTaskOtherRatios(info, "wanx2.1-t2v-turbo"))
+}
+
+func TestShouldApplyTaskOtherRatiosKeepsDoubaoVideoSeedancePricing(t *testing.T) {
+	info := &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelType: constant.ChannelTypeDoubaoVideo,
+		},
+		PriceData: types.PriceData{
+			UsePrice: false,
+			Quota:    int(common.QuotaPerUnit),
+			OtherRatios: map[string]float64{
+				"seconds": 4,
+			},
+		},
+	}
+
+	require.True(t, shouldApplyTaskOtherRatios(info, "doubao-seedance-2-0-fast-260128"))
+}
+
 func setupVideoResolutionPricingRules(t *testing.T) {
 	t.Helper()
 	setupVideoResolutionPricingRulesWithUnit(t, per_request_pricing.UnitSecond)

@@ -219,16 +219,18 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	// 5. 计费估算：让适配器根据用户请求提供 OtherRatios（时长、分辨率等）
 	//    必须在 ModelPriceHelperPerCall 之后调用（它会重建 PriceData）。
 	//    ResolveOriginTask 可能已在 remix 路径中预设了 OtherRatios，此处合并。
-	if info.PriceData.ResolvedPerRequestPricing == nil {
+	if shouldApplyTaskOtherRatios(info, modelName) {
 		if estimatedRatios := adaptor.EstimateBilling(c, info); len(estimatedRatios) > 0 {
 			for k, v := range estimatedRatios {
 				info.PriceData.AddOtherRatio(k, v)
 			}
 		}
+	} else {
+		info.PriceData.OtherRatios = nil
 	}
 
 	// 6. 将 OtherRatios 应用到基础额度
-	if info.PriceData.ResolvedPerRequestPricing == nil && !common.StringsContains(constant.TaskPricePatches, modelName) {
+	if shouldApplyTaskOtherRatios(info, modelName) {
 		for _, ra := range info.PriceData.OtherRatios {
 			if ra != 1.0 {
 				info.PriceData.Quota = int(float64(info.PriceData.Quota) * ra)
@@ -276,7 +278,7 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 
 	// 11. 提交后计费调整：让适配器根据上游实际返回调整 OtherRatios
 	finalQuota := info.PriceData.Quota
-	if adjustedRatios := adaptor.AdjustBillingOnSubmit(info, taskData); len(adjustedRatios) > 0 {
+	if adjustedRatios := adaptor.AdjustBillingOnSubmit(info, taskData); shouldApplyTaskOtherRatios(info, modelName) && len(adjustedRatios) > 0 {
 		// 基于调整后的 ratios 重新计算 quota
 		finalQuota = recalcQuotaFromRatios(info, adjustedRatios)
 		info.PriceData.OtherRatios = adjustedRatios
@@ -364,6 +366,22 @@ func metadataPositiveInt(metadata map[string]interface{}, keys ...string) int {
 		}
 	}
 	return 0
+}
+
+func shouldApplyTaskOtherRatios(info *relaycommon.RelayInfo, modelName string) bool {
+	if info.PriceData.ResolvedPerRequestPricing != nil {
+		return false
+	}
+	if info.PriceData.UsePrice {
+		return false
+	}
+	if info.ChannelType == constant.ChannelTypeSora || info.ChannelType == constant.ChannelTypeOpenAI || info.ChannelType == constant.ChannelTypeXai {
+		return false
+	}
+	if common.StringsContains(constant.TaskPricePatches, modelName) {
+		return false
+	}
+	return true
 }
 
 // recalcQuotaFromRatios 根据 adjustedRatios 重新计算 quota。
@@ -547,8 +565,9 @@ func tryRealtimeFetch(task *model.Task, isOpenAIVideoAPI bool) []byte {
 	}
 
 	resp, err := adaptor.FetchTask(baseURL, channelModel.Key, map[string]any{
-		"task_id": task.GetUpstreamTaskID(),
-		"action":  task.Action,
+		"task_id":         task.GetUpstreamTaskID(),
+		"action":          task.Action,
+		"billing_context": task.PrivateData.BillingContext,
 	}, proxy)
 	if err != nil || resp == nil {
 		return nil

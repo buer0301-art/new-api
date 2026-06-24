@@ -19,6 +19,7 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 
 	"github.com/samber/lo"
+	"github.com/tidwall/gjson"
 )
 
 // TaskPollingAdaptor 定义轮询所需的最小适配器接口，避免 service -> relay 的循环依赖
@@ -360,8 +361,9 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		key = privateData.Key
 	}
 	resp, err := adaptor.FetchTask(baseURL, key, map[string]any{
-		"task_id": task.GetUpstreamTaskID(),
-		"action":  task.Action,
+		"task_id":         task.GetUpstreamTaskID(),
+		"action":          task.Action,
+		"billing_context": task.PrivateData.BillingContext,
 	}, proxy)
 	if err != nil {
 		return fmt.Errorf("fetchTask failed for task %s: %w", taskId, err)
@@ -387,6 +389,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		taskResult.Url = t.GetResultURL()
 		taskResult.Progress = t.Progress
 		taskResult.Reason = t.FailReason
+		taskResult.CompletionTokens, taskResult.TotalTokens = extractVideoTaskUsageTokens(responseBody)
 		task.Data = t.Data
 	} else if taskResult, err = adaptor.ParseTaskResult(responseBody); err != nil {
 		return fmt.Errorf("parseTaskResult failed for task %s: %w", taskId, err)
@@ -394,7 +397,17 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 
 	task.Data = redactVideoResponseBody(responseBody)
 
-	logger.LogDebug(ctx, "updateVideoSingleTask taskResult: %+v", taskResult)
+	logger.LogInfo(ctx, fmt.Sprintf(
+		"video task parse trace: task=%s upstream_task=%s status=%s progress=%s total_tokens=%d completion_tokens=%d url_set=%t response=%s",
+		task.TaskID,
+		task.GetUpstreamTaskID(),
+		taskResult.Status,
+		taskResult.Progress,
+		taskResult.TotalTokens,
+		taskResult.CompletionTokens,
+		taskResult.Url != "",
+		truncateLogBody(responseBody, 1200),
+	))
 
 	now := time.Now().Unix()
 	if taskResult.Status == "" {
@@ -470,6 +483,22 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		task.Progress = taskResult.Progress
 	}
 
+	logger.LogInfo(ctx, fmt.Sprintf(
+		"video task poll billing trace: task=%s upstream_task=%s platform=%s channel=%d old_status=%s parsed_status=%s progress=%s quota=%s should_refund=%t should_settle=%t reason=%q response=%s",
+		task.TaskID,
+		task.GetUpstreamTaskID(),
+		task.Platform,
+		task.ChannelId,
+		snap.Status,
+		task.Status,
+		task.Progress,
+		logger.LogQuota(quota),
+		shouldRefund,
+		shouldSettle,
+		task.FailReason,
+		truncateLogBody(responseBody, 1200),
+	))
+
 	isDone := task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure
 	if isDone && snap.Status != task.Status {
 		won, err := task.UpdateWithStatus(snap.Status)
@@ -499,6 +528,32 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 	}
 
 	return nil
+}
+
+func truncateLogBody(body []byte, limit int) string {
+	if limit <= 0 || len(body) <= limit {
+		return string(body)
+	}
+	return string(body[:limit]) + "...(truncated)"
+}
+
+func extractVideoTaskUsageTokens(body []byte) (completionTokens int, totalTokens int) {
+	paths := []struct {
+		completion string
+		total      string
+	}{
+		{"data.data.usage.completion_tokens", "data.data.usage.total_tokens"},
+		{"data.usage.completion_tokens", "data.usage.total_tokens"},
+		{"usage.completion_tokens", "usage.total_tokens"},
+	}
+	for _, p := range paths {
+		completion := int(gjson.GetBytes(body, p.completion).Int())
+		total := int(gjson.GetBytes(body, p.total).Int())
+		if completion > 0 || total > 0 {
+			return completion, total
+		}
+	}
+	return 0, 0
 }
 
 func redactVideoResponseBody(body []byte) []byte {
@@ -541,6 +596,16 @@ func truncateBase64(s string) string {
 //  2. taskResult.TotalTokens > 0 → 按 token 重算
 //  3. 都不满足 → 保持预扣额度不变
 func settleTaskBillingOnComplete(ctx context.Context, adaptor TaskPollingAdaptor, task *model.Task, taskResult *relaycommon.TaskInfo) {
+	logger.LogInfo(ctx, fmt.Sprintf(
+		"video task settle trace: task=%s status=%s quota=%s total_tokens=%d completion_tokens=%d per_call=%t billing_context=%s",
+		task.TaskID,
+		taskResult.Status,
+		logger.LogQuota(task.Quota),
+		taskResult.TotalTokens,
+		taskResult.CompletionTokens,
+		task.PrivateData.BillingContext != nil && task.PrivateData.BillingContext.PerCallBilling,
+		common.GetJsonString(task.PrivateData.BillingContext),
+	))
 	// 0. 按次计费的任务不做差额结算
 	if bc := task.PrivateData.BillingContext; bc != nil && bc.PerCallBilling {
 		logger.LogInfo(ctx, fmt.Sprintf("任务 %s 按次计费，跳过差额结算", task.TaskID))
@@ -548,13 +613,16 @@ func settleTaskBillingOnComplete(ctx context.Context, adaptor TaskPollingAdaptor
 	}
 	// 1. 优先让 adaptor 决定最终额度
 	if actualQuota := adaptor.AdjustBillingOnComplete(task, taskResult); actualQuota > 0 {
+		logger.LogInfo(ctx, fmt.Sprintf("video task settle trace: task=%s adaptor_actual_quota=%s", task.TaskID, logger.LogQuota(actualQuota)))
 		RecalculateTaskQuota(ctx, task, actualQuota, "adaptor计费调整")
 		return
 	}
 	// 2. 回退到 token 重算
 	if taskResult.TotalTokens > 0 {
+		logger.LogInfo(ctx, fmt.Sprintf("video task settle trace: task=%s recalculate_by_tokens=%d", task.TaskID, taskResult.TotalTokens))
 		RecalculateTaskQuotaByTokens(ctx, task, taskResult.TotalTokens)
 		return
 	}
 	// 3. 无调整，保持预扣额度
+	logger.LogWarn(ctx, fmt.Sprintf("video task settle trace: task=%s no_adjustment total_tokens=0 adaptor_actual_quota=0 keep_quota=%s", task.TaskID, logger.LogQuota(task.Quota)))
 }

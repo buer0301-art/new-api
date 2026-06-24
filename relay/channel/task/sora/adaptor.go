@@ -21,6 +21,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
+	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
 
@@ -39,25 +40,68 @@ type ImageURL struct {
 }
 
 type responseTask struct {
-	ID                 string `json:"id"`
-	TaskID             string `json:"task_id,omitempty"` //兼容旧接口
-	Object             string `json:"object"`
-	Model              string `json:"model"`
-	Status             string `json:"status"`
-	Progress           int    `json:"progress"`
-	CreatedAt          int64  `json:"created_at"`
-	CompletedAt        int64  `json:"completed_at,omitempty"`
-	ExpiresAt          int64  `json:"expires_at,omitempty"`
-	Seconds            string `json:"seconds,omitempty"`
-	Size               string `json:"size,omitempty"`
-	RemixedFromVideoID string `json:"remixed_from_video_id,omitempty"`
+	ID                 string        `json:"id"`
+	TaskID             string        `json:"task_id,omitempty"` //兼容旧接口
+	Data               *responseTask `json:"data,omitempty"`
+	Object             string        `json:"object"`
+	Model              string        `json:"model"`
+	Status             string        `json:"status"`
+	Progress           int           `json:"progress"`
+	CreatedAt          int64         `json:"created_at"`
+	CompletedAt        int64         `json:"completed_at,omitempty"`
+	ExpiresAt          int64         `json:"expires_at,omitempty"`
+	Seconds            string        `json:"seconds,omitempty"`
+	Size               string        `json:"size,omitempty"`
+	RemixedFromVideoID string        `json:"remixed_from_video_id,omitempty"`
 	Error              *struct {
 		Message string `json:"message"`
 		Code    string `json:"code"`
 	} `json:"error,omitempty"`
-	Video *struct {
+	URL       string   `json:"url,omitempty"`
+	VideoURL  string   `json:"video_url,omitempty"`
+	ResultURL string   `json:"result_url,omitempty"`
+	Output    []string `json:"output,omitempty"`
+	Video     *struct {
 		URL string `json:"url"`
 	} `json:"video,omitempty"`
+	Usage *taskUsage `json:"usage,omitempty"`
+}
+
+type taskUsage struct {
+	CompletionTokens int `json:"completion_tokens,omitempty"`
+	TotalTokens      int `json:"total_tokens,omitempty"`
+}
+
+func (r responseTask) resultURL() string {
+	if r.Video != nil && strings.TrimSpace(r.Video.URL) != "" {
+		return strings.TrimSpace(r.Video.URL)
+	}
+	for _, url := range []string{r.ResultURL, r.VideoURL, r.URL} {
+		if strings.TrimSpace(url) != "" {
+			return strings.TrimSpace(url)
+		}
+	}
+	for _, url := range r.Output {
+		if strings.TrimSpace(url) != "" {
+			return strings.TrimSpace(url)
+		}
+	}
+	return ""
+}
+
+func (r responseTask) usage() taskUsage {
+	if r.Usage != nil {
+		return *r.Usage
+	}
+	if r.Data != nil {
+		return r.Data.usage()
+	}
+	return taskUsage{}
+}
+
+func (r responseTask) hasUsage() bool {
+	usage := r.usage()
+	return usage.TotalTokens > 0 || usage.CompletionTokens > 0
 }
 
 // ============================
@@ -265,6 +309,7 @@ func (a *TaskAdaptor) FetchTask(baseUrl, key string, body map[string]any, proxy 
 	if !ok {
 		return nil, fmt.Errorf("invalid task_id")
 	}
+	billingContext, _ := body["billing_context"].(*model.TaskBillingContext)
 
 	uri := fmt.Sprintf("%s/v1/videos/%s", baseUrl, taskID)
 
@@ -279,7 +324,175 @@ func (a *TaskAdaptor) FetchTask(baseUrl, key string, body map[string]any, proxy 
 	if err != nil {
 		return nil, fmt.Errorf("new proxy http client failed: %w", err)
 	}
-	return client.Do(req)
+	if client == nil {
+		client = http.DefaultClient
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if shouldFetchVideoGenerationsUsage(billingContext) {
+		common.SysLog(fmt.Sprintf(
+			"sora video fetch trace: task=%s fallback_enabled=true model_price=%.6f model_ratio=%.6f per_call=%t",
+			taskID,
+			billingContext.ModelPrice,
+			billingContext.ModelRatio,
+			billingContext.PerCallBilling,
+		))
+		return a.addVideoGenerationsUsageIfNeeded(client, resp, baseUrl, key, taskID)
+	}
+	common.SysLog(fmt.Sprintf(
+		"sora video fetch trace: task=%s fallback_enabled=false billing_context=%s",
+		taskID,
+		common.GetJsonString(billingContext),
+	))
+	return resp, nil
+}
+
+func shouldFetchVideoGenerationsUsage(bc *model.TaskBillingContext) bool {
+	if bc == nil {
+		return false
+	}
+	if bc.PerCallBilling || bc.ResolvedPerRequestPricing != nil {
+		return false
+	}
+	return bc.ModelRatio > 0 && bc.ModelPrice < 0
+}
+
+func (a *TaskAdaptor) addVideoGenerationsUsageIfNeeded(client *http.Client, resp *http.Response, baseUrl, key, taskID string) (*http.Response, error) {
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp, err
+	}
+	_ = resp.Body.Close()
+	resp.Body = io.NopCloser(bytes.NewReader(respBody))
+
+	var resTask responseTask
+	if err := common.Unmarshal(respBody, &resTask); err != nil {
+		common.SysLog(fmt.Sprintf("sora video fallback trace: task=%s parse_primary_failed err=%v body=%s", taskID, err, truncateSoraLogBody(respBody, 1200)))
+		return resp, nil
+	}
+	if resTask.Status == "" && resTask.Data != nil {
+		resTask = *resTask.Data
+	}
+	status := strings.ToLower(strings.TrimSpace(resTask.Status))
+	common.SysLog(fmt.Sprintf(
+		"sora video fallback trace: task=%s primary_status=%s primary_has_usage=%t primary_body=%s",
+		taskID,
+		status,
+		resTask.hasUsage(),
+		truncateSoraLogBody(respBody, 1200),
+	))
+	if status != "completed" && status != "done" && status != "succeeded" && status != "success" && status != "unknown" {
+		return resp, nil
+	}
+	if resTask.hasUsage() {
+		return resp, nil
+	}
+
+	usageURI := fmt.Sprintf("%s/v1/video/generations/%s", baseUrl, taskID)
+	usageReq, err := http.NewRequest(http.MethodGet, usageURI, nil)
+	if err != nil {
+		return resp, nil
+	}
+	usageReq.Header.Set("Authorization", "Bearer "+key)
+
+	usageResp, err := client.Do(usageReq)
+	if err != nil {
+		common.SysLog(fmt.Sprintf("sora video fallback trace: task=%s usage_request_failed err=%v", taskID, err))
+		return resp, nil
+	}
+	defer usageResp.Body.Close()
+
+	usageBody, err := io.ReadAll(usageResp.Body)
+	if err != nil {
+		common.SysLog(fmt.Sprintf("sora video fallback trace: task=%s read_usage_failed err=%v", taskID, err))
+		return resp, nil
+	}
+	usage := extractVideoGenerationsUsage(usageBody)
+	usageStatus := strings.ToLower(strings.TrimSpace(firstGJSONString(usageBody, "data.status", "status")))
+	resultURL := strings.TrimSpace(firstGJSONString(usageBody, "data.result_url", "result_url", "data.data.content.video_url", "data.content.video_url"))
+	common.SysLog(fmt.Sprintf(
+		"sora video fallback trace: task=%s usage_status_code=%d usage_status=%s total_tokens=%d completion_tokens=%d result_url_set=%t usage_body=%s",
+		taskID,
+		usageResp.StatusCode,
+		usageStatus,
+		usage.TotalTokens,
+		usage.CompletionTokens,
+		resultURL != "",
+		truncateSoraLogBody(usageBody, 1200),
+	))
+	if usage.TotalTokens <= 0 && usage.CompletionTokens <= 0 {
+		var bodyMap map[string]any
+		if err := common.Unmarshal(respBody, &bodyMap); err != nil {
+			return resp, nil
+		}
+		bodyMap["status"] = "in_progress"
+		bodyMap["progress"] = 99
+		pendingBody, err := common.Marshal(bodyMap)
+		if err != nil {
+			return resp, nil
+		}
+		resp.Body = io.NopCloser(bytes.NewReader(pendingBody))
+		resp.ContentLength = int64(len(pendingBody))
+		return resp, nil
+	}
+	var bodyMap map[string]any
+	if err := common.Unmarshal(respBody, &bodyMap); err != nil {
+		return resp, nil
+	}
+	bodyMap["usage"] = usage
+	if resultURL != "" {
+		bodyMap["result_url"] = resultURL
+	}
+	if usageStatus == "completed" || usageStatus == "done" || usageStatus == "succeeded" || usageStatus == "success" {
+		bodyMap["status"] = "completed"
+		bodyMap["progress"] = 100
+	}
+	mergedBody, err := common.Marshal(bodyMap)
+	if err != nil {
+		return resp, nil
+	}
+	resp.Body = io.NopCloser(bytes.NewReader(mergedBody))
+	resp.ContentLength = int64(len(mergedBody))
+	return resp, nil
+}
+
+func extractVideoGenerationsUsage(body []byte) taskUsage {
+	paths := []struct {
+		completion string
+		total      string
+	}{
+		{"data.data.usage.completion_tokens", "data.data.usage.total_tokens"},
+		{"data.usage.completion_tokens", "data.usage.total_tokens"},
+		{"usage.completion_tokens", "usage.total_tokens"},
+	}
+	for _, p := range paths {
+		usage := taskUsage{
+			CompletionTokens: int(gjson.GetBytes(body, p.completion).Int()),
+			TotalTokens:      int(gjson.GetBytes(body, p.total).Int()),
+		}
+		if usage.CompletionTokens > 0 || usage.TotalTokens > 0 {
+			return usage
+		}
+	}
+	return taskUsage{}
+}
+
+func firstGJSONString(body []byte, paths ...string) string {
+	for _, path := range paths {
+		if value := gjson.GetBytes(body, path); value.Exists() {
+			return value.String()
+		}
+	}
+	return ""
+}
+
+func truncateSoraLogBody(body []byte, limit int) string {
+	if limit <= 0 || len(body) <= limit {
+		return string(body)
+	}
+	return string(body[:limit]) + "...(truncated)"
 }
 
 func (a *TaskAdaptor) GetModelList() []string {
@@ -295,21 +508,28 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 	if err := common.Unmarshal(respBody, &resTask); err != nil {
 		return nil, errors.Wrap(err, "unmarshal task result failed")
 	}
+	if resTask.Status == "" && resTask.Data != nil {
+		resTask = *resTask.Data
+	}
+	usage := resTask.usage()
 
 	taskResult := relaycommon.TaskInfo{
-		Code: 0,
+		Code:             0,
+		CompletionTokens: usage.CompletionTokens,
+		TotalTokens:      usage.TotalTokens,
 	}
 
-	switch resTask.Status {
+	switch strings.ToLower(strings.TrimSpace(resTask.Status)) {
 	case "queued", "pending":
 		taskResult.Status = model.TaskStatusQueued
 	case "processing", "in_progress":
 		taskResult.Status = model.TaskStatusInProgress
+	case "unknown":
+		taskResult.Status = model.TaskStatusInProgress
+		taskResult.Progress = "99%"
 	case "completed", "done", "succeeded", "success":
 		taskResult.Status = model.TaskStatusSuccess
-		if resTask.Video != nil {
-			taskResult.Url = strings.TrimSpace(resTask.Video.URL)
-		}
+		taskResult.Url = resTask.resultURL()
 	case "failed", "cancelled":
 		taskResult.Status = model.TaskStatusFailure
 		if resTask.Error != nil {
