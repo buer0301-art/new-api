@@ -67,6 +67,7 @@ export interface DrawingLogFilters extends CommonFilters {
  */
 export interface TaskLogFilters extends CommonFilters {
   taskId?: string
+  requestId?: string
 }
 
 /**
@@ -217,6 +218,8 @@ export interface LogOtherData {
 export interface LogStatistics {
   quota: number
   token: number
+  cache_read_token: number
+  cache_write_token: number
   rpm: number
   tpm: number
 }
@@ -261,6 +264,7 @@ export interface TaskLog {
   task_id: string
   action: string // MUSIC, LYRICS, GENERATE, TEXT_GENERATE, etc.
   channel_id: number
+  request_id?: string
   submit_time: number // seconds
   finish_time?: number // seconds
   progress?: string
@@ -344,6 +348,7 @@ export interface GetTaskLogsParams {
   page_size?: number
   channel_id?: string
   task_id?: string
+  request_id?: string
   start_timestamp?: number
   end_timestamp?: number
 }

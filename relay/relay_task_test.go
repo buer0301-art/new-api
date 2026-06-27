@@ -7,6 +7,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/setting/per_request_pricing"
@@ -23,6 +24,19 @@ func TestResolveVideoPricingInputFromTaskRequestSoraDefaultsDuration(t *testing.
 	require.Equal(t, 4, input.Duration)
 	require.Empty(t, input.Seconds)
 	require.Equal(t, "720x1280", input.Size)
+}
+
+func TestTaskModel2DtoIncludesRequestId(t *testing.T) {
+	task := &model.Task{
+		TaskID: "task_request_id",
+		PrivateData: model.TaskPrivateData{
+			RequestId: "req-task-123",
+		},
+	}
+
+	dto := TaskModel2Dto(task)
+
+	require.Equal(t, "req-task-123", dto.RequestId)
 }
 
 func TestResolveVideoPricingInputFromTaskRequestUsesMetadataDurationSeconds(t *testing.T) {

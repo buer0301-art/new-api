@@ -80,6 +80,8 @@ export function CommonLogsStats() {
         <Skeleton className='h-7 w-[150px] rounded-md' />
         <Skeleton className='h-7 w-[100px] rounded-md' />
         <Skeleton className='h-7 w-[120px] rounded-md' />
+        <Skeleton className='h-7 w-[120px] rounded-md' />
+        <Skeleton className='h-7 w-[120px] rounded-md' />
       </div>
     )
   }
@@ -95,6 +97,24 @@ export function CommonLogsStats() {
         label={t('Consumed Tokens')}
         value={sensitiveVisible ? formatTokenCount(stats?.token || 0) : '••••'}
         accent='bg-violet-500/65'
+      />
+      <StatBadge
+        label={t('Cache Read Tokens')}
+        value={
+          sensitiveVisible
+            ? formatTokenCount(stats?.cache_read_token || 0)
+            : '••••'
+        }
+        accent='bg-emerald-500/65'
+      />
+      <StatBadge
+        label={t('Cache Write Tokens')}
+        value={
+          sensitiveVisible
+            ? formatTokenCount(stats?.cache_write_token || 0)
+            : '••••'
+        }
+        accent='bg-amber-500/70'
       />
       <StatBadge
         label={t('RPM')}

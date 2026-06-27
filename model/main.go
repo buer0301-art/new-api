@@ -394,7 +394,26 @@ func migrateClickHouseLogDB() error {
 	if err := LOG_DB.Exec(clickHouseLogCreateTableSQL(ttlDays)).Error; err != nil {
 		return err
 	}
+	if err := ensureClickHouseLogCacheTokenColumns(); err != nil {
+		return err
+	}
 	return syncClickHouseLogTTL(ttlDays)
+}
+
+func ensureClickHouseLogCacheTokenColumns() error {
+	columns := []struct {
+		name string
+		ddl  string
+	}{
+		{name: "cache_read_tokens", ddl: "Int32 DEFAULT 0"},
+		{name: "cache_write_tokens", ddl: "Int32 DEFAULT 0"},
+	}
+	for _, column := range columns {
+		if err := LOG_DB.Exec(fmt.Sprintf("ALTER TABLE logs ADD COLUMN IF NOT EXISTS %s %s", column.name, column.ddl)).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func clickHouseLogTTLDays() int {
@@ -434,6 +453,8 @@ CREATE TABLE IF NOT EXISTS logs (
 	quota Int32 DEFAULT 0,
 	prompt_tokens Int32 DEFAULT 0,
 	completion_tokens Int32 DEFAULT 0,
+	cache_read_tokens Int32 DEFAULT 0,
+	cache_write_tokens Int32 DEFAULT 0,
 	use_time Int32 DEFAULT 0,
 	is_stream UInt8 DEFAULT 0,
 	channel_id Int32 DEFAULT 0,

@@ -397,18 +397,6 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 
 	task.Data = redactVideoResponseBody(responseBody)
 
-	logger.LogInfo(ctx, fmt.Sprintf(
-		"video task parse trace: task=%s upstream_task=%s status=%s progress=%s total_tokens=%d completion_tokens=%d url_set=%t response=%s",
-		task.TaskID,
-		task.GetUpstreamTaskID(),
-		taskResult.Status,
-		taskResult.Progress,
-		taskResult.TotalTokens,
-		taskResult.CompletionTokens,
-		taskResult.Url != "",
-		truncateLogBody(responseBody, 1200),
-	))
-
 	now := time.Now().Unix()
 	if taskResult.Status == "" {
 		//taskResult = relaycommon.FailTaskInfo("upstream returned empty status")
@@ -483,22 +471,6 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		task.Progress = taskResult.Progress
 	}
 
-	logger.LogInfo(ctx, fmt.Sprintf(
-		"video task poll billing trace: task=%s upstream_task=%s platform=%s channel=%d old_status=%s parsed_status=%s progress=%s quota=%s should_refund=%t should_settle=%t reason=%q response=%s",
-		task.TaskID,
-		task.GetUpstreamTaskID(),
-		task.Platform,
-		task.ChannelId,
-		snap.Status,
-		task.Status,
-		task.Progress,
-		logger.LogQuota(quota),
-		shouldRefund,
-		shouldSettle,
-		task.FailReason,
-		truncateLogBody(responseBody, 1200),
-	))
-
 	isDone := task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure
 	if isDone && snap.Status != task.Status {
 		won, err := task.UpdateWithStatus(snap.Status)
@@ -528,13 +500,6 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 	}
 
 	return nil
-}
-
-func truncateLogBody(body []byte, limit int) string {
-	if limit <= 0 || len(body) <= limit {
-		return string(body)
-	}
-	return string(body[:limit]) + "...(truncated)"
 }
 
 func extractVideoTaskUsageTokens(body []byte) (completionTokens int, totalTokens int) {

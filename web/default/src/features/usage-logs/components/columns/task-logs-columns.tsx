@@ -179,6 +179,15 @@ export function useTaskLogsColumns(isAdmin: boolean): ColumnDef<TaskLog>[] {
               size='sm'
               className='border-border/60 bg-muted/30 !text-foreground max-w-full truncate rounded-md border px-1.5 py-0.5 font-mono'
             />
+            {log.request_id && (
+              <StatusBadge
+                label={`${t('Request ID')}: ${log.request_id}`}
+                copyText={log.request_id}
+                variant='neutral'
+                size='sm'
+                className='border-border/40 bg-muted/20 text-muted-foreground max-w-full truncate rounded-md border px-1.5 py-0.5 font-mono text-[10px]'
+              />
+            )}
             <span className='text-muted-foreground/60 truncate text-[11px]'>
               {t(log.platform)} · {t(taskActionMapper.getLabel(log.action))}
             </span>

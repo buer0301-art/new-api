@@ -52,8 +52,9 @@ type Task struct {
 	Group      string                `json:"group" gorm:"type:varchar(50)"` // 修正计费用
 	ChannelId  int                   `json:"channel_id" gorm:"index"`
 	Quota      int                   `json:"quota"`
-	Action     string                `json:"action" gorm:"type:varchar(40);index"` // 任务类型, song, lyrics, description-mode
-	Status     TaskStatus            `json:"status" gorm:"type:varchar(20);index"` // 任务状态
+	RequestId  string                `json:"request_id,omitempty" gorm:"type:varchar(64);index;default:''"` // 提交任务请求的请求 ID
+	Action     string                `json:"action" gorm:"type:varchar(40);index"`                          // 任务类型, song, lyrics, description-mode
+	Status     TaskStatus            `json:"status" gorm:"type:varchar(20);index"`                          // 任务状态
 	FailReason string                `json:"fail_reason"`
 	SubmitTime int64                 `json:"submit_time" gorm:"index"`
 	StartTime  int64                 `json:"start_time" gorm:"index"`
@@ -101,6 +102,7 @@ type TaskPrivateData struct {
 	Key            string `json:"key,omitempty"`
 	UpstreamTaskID string `json:"upstream_task_id,omitempty"` // 上游真实 task ID
 	ResultURL      string `json:"result_url,omitempty"`       // 任务成功后的结果 URL（视频地址等）
+	RequestId      string `json:"request_id,omitempty"`       // 提交任务请求的请求 ID
 	// 计费上下文：用于异步退款/差额结算（轮询阶段读取）
 	BillingSource  string              `json:"billing_source,omitempty"`  // "wallet" 或 "subscription"
 	SubscriptionId int                 `json:"subscription_id,omitempty"` // 订阅 ID，用于订阅退款
@@ -166,6 +168,7 @@ type SyncTaskQueryParams struct {
 	UserID         string
 	Action         string
 	Status         string
+	RequestId      string
 	StartTimestamp int64
 	EndTimestamp   int64
 	UserIDs        []int
@@ -174,6 +177,11 @@ type SyncTaskQueryParams struct {
 func InitTask(platform constant.TaskPlatform, relayInfo *commonRelay.RelayInfo) *Task {
 	properties := Properties{}
 	privateData := TaskPrivateData{}
+	requestId := ""
+	if relayInfo != nil && relayInfo.RequestId != "" {
+		requestId = relayInfo.RequestId
+		privateData.RequestId = requestId
+	}
 	if relayInfo != nil && relayInfo.ChannelMeta != nil {
 		if relayInfo.ChannelMeta.ChannelType == constant.ChannelTypeGemini ||
 			relayInfo.ChannelMeta.ChannelType == constant.ChannelTypeVertexAi {
@@ -203,6 +211,7 @@ func InitTask(platform constant.TaskPlatform, relayInfo *commonRelay.RelayInfo) 
 		Status:      TaskStatusNotStart,
 		Progress:    "0%",
 		ChannelId:   relayInfo.ChannelId,
+		RequestId:   requestId,
 		Platform:    platform,
 		Properties:  properties,
 		PrivateData: privateData,
@@ -219,6 +228,9 @@ func TaskGetAllUserTask(userId int, startIdx int, num int, queryParams SyncTaskQ
 
 	if queryParams.TaskID != "" {
 		query = query.Where("task_id = ?", queryParams.TaskID)
+	}
+	if queryParams.RequestId != "" {
+		query = query.Where("request_id = ?", queryParams.RequestId)
 	}
 	if queryParams.Action != "" {
 		query = query.Where("action = ?", queryParams.Action)
@@ -268,6 +280,9 @@ func TaskGetAllTasks(startIdx int, num int, queryParams SyncTaskQueryParams) []*
 	}
 	if queryParams.TaskID != "" {
 		query = query.Where("task_id = ?", queryParams.TaskID)
+	}
+	if queryParams.RequestId != "" {
+		query = query.Where("request_id = ?", queryParams.RequestId)
 	}
 	if queryParams.Action != "" {
 		query = query.Where("action = ?", queryParams.Action)
@@ -467,6 +482,9 @@ func TaskCountAllTasks(queryParams SyncTaskQueryParams) int64 {
 	if queryParams.TaskID != "" {
 		query = query.Where("task_id = ?", queryParams.TaskID)
 	}
+	if queryParams.RequestId != "" {
+		query = query.Where("request_id = ?", queryParams.RequestId)
+	}
 	if queryParams.Action != "" {
 		query = query.Where("action = ?", queryParams.Action)
 	}
@@ -489,6 +507,9 @@ func TaskCountAllUserTask(userId int, queryParams SyncTaskQueryParams) int64 {
 	query := DB.Model(&Task{}).Where("user_id = ?", userId)
 	if queryParams.TaskID != "" {
 		query = query.Where("task_id = ?", queryParams.TaskID)
+	}
+	if queryParams.RequestId != "" {
+		query = query.Where("request_id = ?", queryParams.RequestId)
 	}
 	if queryParams.Action != "" {
 		query = query.Where("action = ?", queryParams.Action)

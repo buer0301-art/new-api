@@ -83,6 +83,39 @@ func insertTask(t *testing.T, task *Task) {
 	require.NoError(t, DB.Create(task).Error)
 }
 
+func TestTaskGetAllUserTaskFiltersByRequestId(t *testing.T) {
+	truncateTables(t)
+
+	insertTask(t, &Task{
+		TaskID:    "task_request_filter_a",
+		UserId:    1001,
+		RequestId: "req-task-filter-a",
+		Status:    TaskStatusSuccess,
+		Data:      json.RawMessage(`{}`),
+	})
+	insertTask(t, &Task{
+		TaskID:    "task_request_filter_b",
+		UserId:    1001,
+		RequestId: "req-task-filter-b",
+		Status:    TaskStatusSuccess,
+		Data:      json.RawMessage(`{}`),
+	})
+	insertTask(t, &Task{
+		TaskID:    "task_request_filter_other_user",
+		UserId:    1002,
+		RequestId: "req-task-filter-a",
+		Status:    TaskStatusSuccess,
+		Data:      json.RawMessage(`{}`),
+	})
+
+	queryParams := SyncTaskQueryParams{RequestId: "req-task-filter-a"}
+
+	tasks := TaskGetAllUserTask(1001, 0, 10, queryParams)
+	require.Len(t, tasks, 1)
+	assert.Equal(t, "task_request_filter_a", tasks[0].TaskID)
+	assert.Equal(t, int64(1), TaskCountAllUserTask(1001, queryParams))
+}
+
 // ---------------------------------------------------------------------------
 // Snapshot / Equal — pure logic tests (no DB)
 // ---------------------------------------------------------------------------

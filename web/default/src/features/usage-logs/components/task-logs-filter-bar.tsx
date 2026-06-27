@@ -52,6 +52,14 @@ function getFilterValue(
   return (filters as TaskLogFilters).taskId || ''
 }
 
+function getRequestIdValue(
+  filters: TaskLogsFilters,
+  logCategory: TaskLikeLogCategory
+): string {
+  if (logCategory !== 'task') return ''
+  return (filters as TaskLogFilters).requestId || ''
+}
+
 function setFilterValue(
   filters: TaskLogsFilters,
   logCategory: TaskLikeLogCategory,
@@ -96,6 +104,9 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
         : {
             ...baseFilters,
             ...(searchParams.filter ? { taskId: searchParams.filter } : {}),
+            ...(searchParams.requestId
+              ? { requestId: searchParams.requestId }
+              : {}),
           }
 
     setFilters(next)
@@ -105,6 +116,7 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
     searchParams.endTime,
     searchParams.channel,
     searchParams.filter,
+    searchParams.requestId,
   ])
 
   const handleChange = useCallback(
@@ -159,11 +171,13 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
   )
 
   const filterValue = getFilterValue(filters, props.logCategory)
+  const requestIdValue = getRequestIdValue(filters, props.logCategory)
   const placeholder =
     props.logCategory === 'drawing'
       ? t('Filter by MjProxy task ID')
       : t('Filter by task ID')
-  const hasAdditionalFilters = !!filterValue || !!filters.channel
+  const hasAdditionalFilters =
+    !!filterValue || !!requestIdValue || !!filters.channel
   const dateRangeFilter = (
     <LogsFilterField wide>
       <CompactDateTimeRangePicker
@@ -197,6 +211,22 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
       />
     </LogsFilterField>
   ) : null
+  const requestIdFilter =
+    props.logCategory === 'task' ? (
+      <LogsFilterField>
+        <LogsFilterInput
+          placeholder={t('Request ID')}
+          value={requestIdValue}
+          onChange={(e) =>
+            setFilters((prev) => ({
+              ...prev,
+              requestId: e.target.value,
+            }))
+          }
+          onKeyDown={handleKeyDown}
+        />
+      </LogsFilterField>
+    ) : null
 
   return (
     <LogsFilterToolbar
@@ -205,6 +235,7 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
         <>
           {dateRangeFilter}
           {taskIdFilter}
+          {requestIdFilter}
           {channelFilter}
         </>
       }
@@ -212,10 +243,13 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
       mobileFilters={
         <>
           {taskIdFilter}
+          {requestIdFilter}
           {channelFilter}
         </>
       }
-      mobileFilterCount={[filterValue, filters.channel].filter(Boolean).length}
+      mobileFilterCount={[filterValue, requestIdValue, filters.channel].filter(
+        Boolean
+      ).length}
       hasActiveFilters={hasAdditionalFilters}
       onSearch={handleApply}
       searchLoading={fetchingLogs > 0}
