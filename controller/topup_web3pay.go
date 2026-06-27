@@ -347,7 +347,7 @@ func createWeb3PayOrder(c *gin.Context, tradeNo string, payMoney float64) (*web3
 		return nil, fmt.Errorf("读取响应失败: %w", err)
 	}
 	if resp.StatusCode/100 != 2 {
-		return nil, fmt.Errorf("Web3 Pay API http status %d body=%s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("Web3 Pay API http status %d body_len=%d", resp.StatusCode, len(respBody))
 	}
 
 	var apiResp web3PayAPIResponse
@@ -415,20 +415,20 @@ func Web3PayWebhook(c *gin.Context) {
 
 	var raw map[string]interface{}
 	if err := common.Unmarshal(body, &raw); err != nil {
-		logger.LogWarn(c.Request.Context(), fmt.Sprintf("Web3 Pay webhook 解析原始请求失败 path=%q client_ip=%s body=%q error=%q", c.Request.RequestURI, c.ClientIP(), string(body), err.Error()))
+		logger.LogWarn(c.Request.Context(), fmt.Sprintf("Web3 Pay webhook 解析原始请求失败 path=%q client_ip=%s body_len=%d error=%q", c.Request.RequestURI, c.ClientIP(), len(body), err.Error()))
 		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
 	signPayload := web3PayStringMap(raw)
 	if !web3PayVerifyCallbackSign(signPayload, setting.Web3PayApiSecret) {
-		logger.LogWarn(c.Request.Context(), fmt.Sprintf("Web3 Pay webhook 验签失败 path=%q client_ip=%s body=%q", c.Request.RequestURI, c.ClientIP(), string(body)))
+		logger.LogWarn(c.Request.Context(), fmt.Sprintf("Web3 Pay webhook 验签失败 path=%q client_ip=%s body_len=%d", c.Request.RequestURI, c.ClientIP(), len(body)))
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
 
 	var callback web3PayCallback
 	if err := common.Unmarshal(body, &callback); err != nil {
-		logger.LogWarn(c.Request.Context(), fmt.Sprintf("Web3 Pay webhook 解析请求失败 path=%q client_ip=%s body=%q error=%q", c.Request.RequestURI, c.ClientIP(), string(body), err.Error()))
+		logger.LogWarn(c.Request.Context(), fmt.Sprintf("Web3 Pay webhook 解析请求失败 path=%q client_ip=%s body_len=%d error=%q", c.Request.RequestURI, c.ClientIP(), len(body), err.Error()))
 		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}

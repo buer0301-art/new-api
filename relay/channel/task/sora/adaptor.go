@@ -369,7 +369,7 @@ func (a *TaskAdaptor) addVideoGenerationsUsageIfNeeded(client *http.Client, resp
 
 	var resTask responseTask
 	if err := common.Unmarshal(respBody, &resTask); err != nil {
-		common.SysLog(fmt.Sprintf("sora video fallback trace: task=%s parse_primary_failed err=%v body=%s", taskID, err, truncateSoraLogBody(respBody, 1200)))
+		common.SysLog(fmt.Sprintf("sora video fallback trace: task=%s parse_primary_failed err=%v primary_body_len=%d", taskID, err, len(respBody)))
 		return resp, nil
 	}
 	if resTask.Status == "" && resTask.Data != nil {
@@ -377,11 +377,11 @@ func (a *TaskAdaptor) addVideoGenerationsUsageIfNeeded(client *http.Client, resp
 	}
 	status := strings.ToLower(strings.TrimSpace(resTask.Status))
 	common.SysLog(fmt.Sprintf(
-		"sora video fallback trace: task=%s primary_status=%s primary_has_usage=%t primary_body=%s",
+		"sora video fallback trace: task=%s primary_status=%s primary_has_usage=%t primary_body_len=%d",
 		taskID,
 		status,
 		resTask.hasUsage(),
-		truncateSoraLogBody(respBody, 1200),
+		len(respBody),
 	))
 	if status != "completed" && status != "done" && status != "succeeded" && status != "success" && status != "unknown" {
 		return resp, nil
@@ -413,14 +413,14 @@ func (a *TaskAdaptor) addVideoGenerationsUsageIfNeeded(client *http.Client, resp
 	usageStatus := strings.ToLower(strings.TrimSpace(firstGJSONString(usageBody, "data.status", "status")))
 	resultURL := strings.TrimSpace(firstGJSONString(usageBody, "data.result_url", "result_url", "data.data.content.video_url", "data.content.video_url"))
 	common.SysLog(fmt.Sprintf(
-		"sora video fallback trace: task=%s usage_status_code=%d usage_status=%s total_tokens=%d completion_tokens=%d result_url_set=%t usage_body=%s",
+		"sora video fallback trace: task=%s usage_status_code=%d usage_status=%s total_tokens=%d completion_tokens=%d result_url_set=%t usage_body_len=%d",
 		taskID,
 		usageResp.StatusCode,
 		usageStatus,
 		usage.TotalTokens,
 		usage.CompletionTokens,
 		resultURL != "",
-		truncateSoraLogBody(usageBody, 1200),
+		len(usageBody),
 	))
 	if usage.TotalTokens <= 0 && usage.CompletionTokens <= 0 {
 		var bodyMap map[string]any
@@ -486,13 +486,6 @@ func firstGJSONString(body []byte, paths ...string) string {
 		}
 	}
 	return ""
-}
-
-func truncateSoraLogBody(body []byte, limit int) string {
-	if limit <= 0 || len(body) <= limit {
-		return string(body)
-	}
-	return string(body[:limit]) + "...(truncated)"
 }
 
 func (a *TaskAdaptor) GetModelList() []string {
