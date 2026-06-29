@@ -8,6 +8,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -86,10 +87,68 @@ func TestSumUsedQuotaIncludesFilteredTokenTotal(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	require.Equal(t, 300, stat.Quota)
-	require.Equal(t, 1_800_000, stat.Token)
-	require.Equal(t, 60_000, stat.CacheReadToken)
-	require.Equal(t, 80_000, stat.CacheWriteToken)
+	assert.Equal(t, 300, stat.Quota)
+	assert.Equal(t, 1_800_000, stat.Token)
+	assert.Equal(t, 60_000, stat.CacheReadToken)
+	assert.Equal(t, 80_000, stat.CacheWriteToken)
+	assert.Equal(t, 2, stat.Rpm)
+	assert.Equal(t, 1_800_000, stat.Tpm)
+}
+
+func TestSumUsedQuotaRpmTpmRespectTimeRange(t *testing.T) {
+	truncateTables(t)
+
+	now := time.Now().Unix()
+	require.NoError(t, LOG_DB.Create(&Log{
+		Username:         "alice",
+		TokenName:        "prod",
+		ModelName:        "gpt-4o-mini",
+		ChannelId:        10,
+		Group:            "default",
+		Type:             LogTypeConsume,
+		CreatedAt:        now - 30,
+		Quota:            100,
+		PromptTokens:     1_000,
+		CompletionTokens: 2_000,
+	}).Error)
+
+	stat, err := SumUsedQuota(
+		LogTypeConsume,
+		now-10,
+		now,
+		"gpt-4o-mini",
+		"alice",
+		"prod",
+		10,
+		"default",
+		"",
+		"",
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, 0, stat.Quota)
+	assert.Equal(t, 0, stat.Token)
+	assert.Equal(t, 0, stat.Rpm)
+	assert.Equal(t, 0, stat.Tpm)
+
+	stat, err = SumUsedQuota(
+		LogTypeConsume,
+		now-60,
+		now-40,
+		"gpt-4o-mini",
+		"alice",
+		"prod",
+		10,
+		"default",
+		"",
+		"",
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, 0, stat.Quota)
+	assert.Equal(t, 0, stat.Token)
+	assert.Equal(t, 0, stat.Rpm)
+	assert.Equal(t, 0, stat.Tpm)
 }
 
 func TestSumUsedQuotaReturnsZeroForNonConsumeType(t *testing.T) {
@@ -121,12 +180,12 @@ func TestSumUsedQuotaReturnsZeroForNonConsumeType(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	require.Equal(t, 0, stat.Quota)
-	require.Equal(t, 0, stat.Token)
-	require.Equal(t, 0, stat.CacheReadToken)
-	require.Equal(t, 0, stat.CacheWriteToken)
-	require.Equal(t, 0, stat.Rpm)
-	require.Equal(t, 0, stat.Tpm)
+	assert.Equal(t, 0, stat.Quota)
+	assert.Equal(t, 0, stat.Token)
+	assert.Equal(t, 0, stat.CacheReadToken)
+	assert.Equal(t, 0, stat.CacheWriteToken)
+	assert.Equal(t, 0, stat.Rpm)
+	assert.Equal(t, 0, stat.Tpm)
 }
 
 func TestRecordConsumeLogStoresCacheTokenFields(t *testing.T) {
@@ -157,6 +216,6 @@ func TestRecordConsumeLogStoresCacheTokenFields(t *testing.T) {
 
 	var log Log
 	require.NoError(t, LOG_DB.Where("user_id = ? AND type = ?", 1, LogTypeConsume).First(&log).Error)
-	require.Equal(t, 30, log.CacheReadTokens)
-	require.Equal(t, 40, log.CacheWriteTokens)
+	assert.Equal(t, 30, log.CacheReadTokens)
+	assert.Equal(t, 40, log.CacheWriteTokens)
 }
