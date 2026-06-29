@@ -106,7 +106,26 @@ export interface ChannelOtherSettings {
   upstream_model_update_ignored_models?: string[]
   upstream_model_update_last_check_time?: number
   upstream_model_update_last_detected_models?: string[]
+  dynamic_model_mapping?: DynamicModelMappingRule[]
   advanced_custom?: AdvancedCustomConfig
+}
+
+export interface DynamicModelMappingRule {
+  from?: string
+  to?: string
+  when?: DynamicModelMappingCondition[]
+  field_transforms?: DynamicFieldTransform[]
+}
+
+export interface DynamicModelMappingCondition {
+  path?: string
+  op?: string
+  value?: unknown
+}
+
+export interface DynamicFieldTransform {
+  path?: string
+  to?: string
 }
 
 export interface AdvancedCustomConfig {

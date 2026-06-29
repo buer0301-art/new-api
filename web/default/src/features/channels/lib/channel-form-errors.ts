@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { FieldPath } from 'react-hook-form'
+
 import type { ChannelFormValues } from './channel-form'
 
 type ChannelFormErrorMap = Partial<
@@ -32,6 +33,7 @@ const ADVANCED_SETTINGS_FIELDS = new Set<FieldPath<ChannelFormValues>>([
   'remark',
   'param_override',
   'header_override',
+  'dynamic_model_mapping',
   'status_code_mapping',
   'advanced_custom',
   'force_format',

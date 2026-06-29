@@ -208,6 +208,7 @@ function hasAdvancedSettingsValues(values: ChannelFormValues): boolean {
   return Boolean(
     values.param_override?.trim() ||
     values.header_override?.trim() ||
+    values.dynamic_model_mapping?.trim() ||
     values.advanced_custom?.trim() ||
     values.status_code_mapping?.trim() ||
     values.tag?.trim() ||
@@ -2833,6 +2834,74 @@ export function ChannelMutateDrawer({
                                     'Override request parameters. Cannot override stream parameter.'
                                   )}
                                   className='max-h-72 min-h-40 resize-y overflow-auto font-mono text-xs'
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name='dynamic_model_mapping'
+                          render={({ field }) => (
+                            <FormItem className='space-y-3 border-t pt-4'>
+                              <div className='flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between'>
+                                <div className='space-y-1'>
+                                  <FormLabel>
+                                    {t('Dynamic Model Mapping')}
+                                  </FormLabel>
+                                  <FormDescription>
+                                    {t(
+                                      'Select upstream models and field transforms by request parameters.'
+                                    )}
+                                  </FormDescription>
+                                </div>
+                                <div className='flex flex-wrap gap-2'>
+                                  <Button
+                                    type='button'
+                                    variant='outline'
+                                    size='sm'
+                                    onClick={() => {
+                                      try {
+                                        const parsed = JSON.parse(
+                                          field.value || '[]'
+                                        )
+                                        field.onChange(
+                                          JSON.stringify(parsed, null, 2)
+                                        )
+                                      } catch (_e) {
+                                        /* ignore invalid JSON */
+                                      }
+                                    }}
+                                  >
+                                    {t('Format')}
+                                  </Button>
+                                  <Button
+                                    type='button'
+                                    variant='ghost'
+                                    size='sm'
+                                    onClick={() => field.onChange('')}
+                                  >
+                                    {t('Clear')}
+                                  </Button>
+                                </div>
+                              </div>
+                              <FormControl>
+                                <Textarea
+                                  value={field.value || ''}
+                                  onChange={field.onChange}
+                                  disabled={isSubmitting}
+                                  rows={10}
+                                  placeholder='[
+  {
+    "from": "omni-flash",
+    "to": "omni_flash_1-1",
+    "when": [{ "path": "input_reference", "op": "len_eq", "value": 1 }],
+    "field_transforms": [{ "path": "input_reference", "to": "array" }]
+  }
+]'
+                                  className='max-h-80 min-h-48 resize-y overflow-auto font-mono text-xs'
                                 />
                               </FormControl>
                               <FormMessage />

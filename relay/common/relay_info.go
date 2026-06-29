@@ -153,6 +153,8 @@ type RelayInfo struct {
 	RuntimeHeadersOverride                map[string]interface{}
 	UseRuntimeHeadersOverride             bool
 	ParamOverrideAudit                    []string
+	DynamicModelMappingApplied            bool
+	DynamicFieldTransforms                []dto.DynamicFieldTransform
 
 	// UpstreamRequestBodySize is the byte size of the marshaled upstream request
 	// body. It is set when the body is wrapped in a BodyStorage (see
@@ -682,6 +684,52 @@ type TaskRelayInfo struct {
 	LockedChannel any
 }
 
+type FlexibleStringArray []string
+
+func (v *FlexibleStringArray) UnmarshalJSON(data []byte) error {
+	var single string
+	if err := common.Unmarshal(data, &single); err == nil {
+		if strings.TrimSpace(single) == "" {
+			*v = nil
+		} else {
+			*v = []string{single}
+		}
+		return nil
+	}
+
+	var multiple []string
+	if err := common.Unmarshal(data, &multiple); err != nil {
+		return err
+	}
+	out := make([]string, 0, len(multiple))
+	for _, item := range multiple {
+		if strings.TrimSpace(item) != "" {
+			out = append(out, item)
+		}
+	}
+	*v = out
+	return nil
+}
+
+func (v FlexibleStringArray) NonEmpty() []string {
+	out := make([]string, 0, len(v))
+	for _, item := range v {
+		if strings.TrimSpace(item) != "" {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func (v FlexibleStringArray) FirstNonEmpty() string {
+	for _, item := range v {
+		if strings.TrimSpace(item) != "" {
+			return item
+		}
+	}
+	return ""
+}
+
 type TaskSubmitReq struct {
 	Prompt         string                 `json:"prompt"`
 	Model          string                 `json:"model,omitempty"`
@@ -691,7 +739,7 @@ type TaskSubmitReq struct {
 	Size           string                 `json:"size,omitempty"`
 	Duration       int                    `json:"duration,omitempty"`
 	Seconds        string                 `json:"seconds,omitempty"`
-	InputReference string                 `json:"input_reference,omitempty"`
+	InputReference FlexibleStringArray    `json:"input_reference,omitempty"`
 	Metadata       map[string]interface{} `json:"metadata,omitempty"`
 }
 

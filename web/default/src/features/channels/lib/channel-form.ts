@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { z } from 'zod'
+
 import {
   CHANNEL_STATUS,
   ERROR_MESSAGES,
@@ -81,6 +82,46 @@ function isOptionalStatusCodeMapping(value: string | undefined): boolean {
         toCode <= 599
       )
     })
+  } catch {
+    return false
+  }
+}
+
+function isDynamicModelMapping(value: unknown): boolean {
+  if (value === undefined) return true
+  if (!Array.isArray(value)) return false
+  return value.every((rule) => {
+    if (!isJsonObjectValue(rule)) return false
+    if ('from' in rule && typeof rule.from !== 'string') return false
+    if ('to' in rule && typeof rule.to !== 'string') return false
+    if ('when' in rule) {
+      if (!Array.isArray(rule.when)) return false
+      const validConditions = rule.when.every((condition) => {
+        if (!isJsonObjectValue(condition)) return false
+        return (
+          typeof condition.path === 'string' && typeof condition.op === 'string'
+        )
+      })
+      if (!validConditions) return false
+    }
+    if ('field_transforms' in rule) {
+      if (!Array.isArray(rule.field_transforms)) return false
+      const validTransforms = rule.field_transforms.every((transform) => {
+        if (!isJsonObjectValue(transform)) return false
+        return (
+          typeof transform.path === 'string' && typeof transform.to === 'string'
+        )
+      })
+      if (!validTransforms) return false
+    }
+    return true
+  })
+}
+
+function isOptionalDynamicModelMapping(value: string | undefined): boolean {
+  try {
+    const parsed = parseOptionalJson(value)
+    return isDynamicModelMapping(parsed)
   } catch {
     return false
   }
@@ -176,6 +217,13 @@ export const channelFormSchema = z
       .string()
       .optional()
       .refine(isOptionalJsonObject, ERROR_MESSAGES.INVALID_JSON),
+    dynamic_model_mapping: z
+      .string()
+      .optional()
+      .refine(
+        isOptionalDynamicModelMapping,
+        'Dynamic model mapping must be a JSON array of mapping rules'
+      ),
     advanced_custom: z.string().optional(),
     other: z.string().optional(),
     // Multi-key options (not sent to backend directly)
@@ -347,6 +395,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   upstream_model_update_check_enabled: false,
   upstream_model_update_auto_sync_enabled: false,
   upstream_model_update_ignored_models: '',
+  dynamic_model_mapping: '',
   advanced_custom: '',
 }
 
@@ -403,6 +452,7 @@ export function transformChannelToFormDefaults(
   let upstreamModelUpdateCheckEnabled = false
   let upstreamModelUpdateAutoSyncEnabled = false
   let upstreamModelUpdateIgnoredModels = ''
+  let dynamicModelMapping = ''
   let advancedCustom = ''
 
   if (channel.settings) {
@@ -429,6 +479,13 @@ export function transformChannelToFormDefaults(
       )
         ? parsed.upstream_model_update_ignored_models.join(',')
         : ''
+      if (Array.isArray(parsed.dynamic_model_mapping)) {
+        dynamicModelMapping = JSON.stringify(
+          parsed.dynamic_model_mapping,
+          null,
+          2
+        )
+      }
       if (parsed.advanced_custom) {
         advancedCustom = stringifyAdvancedCustomConfig(parsed.advanced_custom)
       }
@@ -482,6 +539,7 @@ export function transformChannelToFormDefaults(
     upstream_model_update_check_enabled: upstreamModelUpdateCheckEnabled,
     upstream_model_update_auto_sync_enabled: upstreamModelUpdateAutoSyncEnabled,
     upstream_model_update_ignored_models: upstreamModelUpdateIgnoredModels,
+    dynamic_model_mapping: dynamicModelMapping,
     advanced_custom: advancedCustom,
   }
 }
@@ -608,6 +666,26 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
     if (typeof settingsObj.upstream_model_update_last_check_time !== 'number') {
       settingsObj.upstream_model_update_last_check_time = 0
     }
+  }
+
+  if (formData.dynamic_model_mapping?.trim()) {
+    try {
+      const dynamicModelMapping = JSON.parse(formData.dynamic_model_mapping)
+      if (
+        Array.isArray(dynamicModelMapping) &&
+        dynamicModelMapping.length > 0
+      ) {
+        settingsObj.dynamic_model_mapping = dynamicModelMapping
+      } else if ('dynamic_model_mapping' in settingsObj) {
+        delete settingsObj.dynamic_model_mapping
+      }
+    } catch (error) {
+      // Schema validation catches invalid JSON before submit.
+      // eslint-disable-next-line no-console
+      console.error('Failed to parse dynamic model mapping:', error)
+    }
+  } else if ('dynamic_model_mapping' in settingsObj) {
+    delete settingsObj.dynamic_model_mapping
   }
 
   if (formData.type === CHANNEL_TYPE_ADVANCED_CUSTOM) {

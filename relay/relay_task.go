@@ -180,6 +180,9 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	if err := helper.ModelMappedHelper(c, info, nil); err != nil {
 		return nil, service.TaskErrorWrapperLocal(err, "model_mapping_failed", http.StatusBadRequest)
 	}
+	if err := helper.ApplyDynamicFieldTransformsToRequestBody(c, info); err != nil {
+		return nil, service.TaskErrorWrapperLocal(err, "dynamic_model_mapping_failed", http.StatusBadRequest)
+	}
 
 	// 3. 预生成公开 task ID（仅首次）
 	if info.PublicTaskID == "" {
