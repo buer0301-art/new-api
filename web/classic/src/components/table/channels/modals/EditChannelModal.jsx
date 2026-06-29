@@ -95,6 +95,15 @@ const STATUS_CODE_MAPPING_EXAMPLE = {
   400: '500',
 };
 
+const DYNAMIC_MODEL_MAPPING_EXAMPLE = [
+  {
+    from: 'omni-flash',
+    to: 'omni_flash_1-1',
+    when: [{ path: 'input_reference', op: 'len_eq', value: 1 }],
+    field_transforms: [{ path: 'input_reference', to: 'array' }],
+  },
+];
+
 const REGION_EXAMPLE = {
   default: 'global',
   'gemini-1.5-pro-002': 'europe-west2',
@@ -195,6 +204,7 @@ const EditChannelModal = (props) => {
     system_prompt: '',
     system_prompt_override: false,
     settings: '',
+    dynamic_model_mapping: '',
     // 仅 Vertex: 密钥格式（存入 settings.vertex_key_type）
     vertex_key_type: 'json',
     // 仅 AWS: 密钥格式和区域（存入 settings.aws_key_type 和 settings.aws_region）
@@ -925,6 +935,11 @@ const EditChannelModal = (props) => {
           )
             ? parsedSettings.upstream_model_update_ignored_models.join(',')
             : '';
+          data.dynamic_model_mapping = Array.isArray(
+            parsedSettings.dynamic_model_mapping,
+          )
+            ? JSON.stringify(parsedSettings.dynamic_model_mapping, null, 2)
+            : '';
         } catch (error) {
           console.error('解析其他设置失败:', error);
           data.azure_responses_version = '';
@@ -944,6 +959,7 @@ const EditChannelModal = (props) => {
           data.upstream_model_update_last_check_time = 0;
           data.upstream_model_update_last_detected_models = [];
           data.upstream_model_update_ignored_models = '';
+          data.dynamic_model_mapping = '';
         }
       } else {
         // 兼容历史数据：老渠道没有 settings 时，默认按 json 展示
@@ -962,6 +978,7 @@ const EditChannelModal = (props) => {
         data.upstream_model_update_last_check_time = 0;
         data.upstream_model_update_last_detected_models = [];
         data.upstream_model_update_ignored_models = '';
+        data.dynamic_model_mapping = '';
       }
 
       if (
@@ -1023,6 +1040,7 @@ const EditChannelModal = (props) => {
       const hasAdvancedValues =
         (data.model_mapping && data.model_mapping.trim()) ||
         (data.param_override && data.param_override.trim()) ||
+        (data.dynamic_model_mapping && data.dynamic_model_mapping.trim()) ||
         (data.status_code_mapping && data.status_code_mapping.trim()) ||
         (data.header_override && data.header_override.trim()) ||
         (data.tag && data.tag.trim()) ||
@@ -1676,6 +1694,29 @@ const EditChannelModal = (props) => {
       }
     }
 
+    const hasDynamicModelMapping =
+      typeof localInputs.dynamic_model_mapping === 'string' &&
+      localInputs.dynamic_model_mapping.trim() !== '';
+    let parsedDynamicModelMapping = null;
+    if (hasDynamicModelMapping) {
+      if (!verifyJSON(localInputs.dynamic_model_mapping)) {
+        showInfo(t('动态模型映射必须是合法的 JSON 数组！'));
+        return;
+      }
+      try {
+        parsedDynamicModelMapping = JSON.parse(
+          localInputs.dynamic_model_mapping,
+        );
+      } catch (error) {
+        showInfo(t('动态模型映射必须是合法的 JSON 数组！'));
+        return;
+      }
+      if (!Array.isArray(parsedDynamicModelMapping)) {
+        showInfo(t('动态模型映射必须是合法的 JSON 数组！'));
+        return;
+      }
+    }
+
     const normalizedModels = (localInputs.models || [])
       .map((model) => (model || '').trim())
       .filter(Boolean);
@@ -1818,6 +1859,14 @@ const EditChannelModal = (props) => {
     if (typeof settings.upstream_model_update_last_check_time !== 'number') {
       settings.upstream_model_update_last_check_time = 0;
     }
+    if (
+      Array.isArray(parsedDynamicModelMapping) &&
+      parsedDynamicModelMapping.length > 0
+    ) {
+      settings.dynamic_model_mapping = parsedDynamicModelMapping;
+    } else if ('dynamic_model_mapping' in settings) {
+      delete settings.dynamic_model_mapping;
+    }
 
     localInputs.settings = JSON.stringify(settings);
 
@@ -1846,6 +1895,7 @@ const EditChannelModal = (props) => {
     delete localInputs.upstream_model_update_last_check_time;
     delete localInputs.upstream_model_update_last_detected_models;
     delete localInputs.upstream_model_update_ignored_models;
+    delete localInputs.dynamic_model_mapping;
 
     let res;
     localInputs.auto_ban = localInputs.auto_ban ? 1 : 0;
@@ -2355,6 +2405,63 @@ const EditChannelModal = (props) => {
                       </pre>
                     </div>
                   </div>
+
+                  <Form.TextArea
+                    field='dynamic_model_mapping'
+                    label={t('动态模型映射')}
+                    placeholder={JSON.stringify(
+                      DYNAMIC_MODEL_MAPPING_EXAMPLE,
+                      null,
+                      2,
+                    )}
+                    autosize
+                    onChange={(value) =>
+                      handleInputChange('dynamic_model_mapping', value)
+                    }
+                    extraText={
+                      <div className='flex flex-col gap-1'>
+                        <Text type='tertiary' size='small'>
+                          {t(
+                            '根据请求参数选择上游模型，并可按配置转换字段类型。',
+                          )}
+                        </Text>
+                        <div className='flex gap-2 flex-wrap items-center'>
+                          <Text
+                            className='!text-semi-color-primary cursor-pointer'
+                            onClick={() =>
+                              handleInputChange(
+                                'dynamic_model_mapping',
+                                JSON.stringify(
+                                  DYNAMIC_MODEL_MAPPING_EXAMPLE,
+                                  null,
+                                  2,
+                                ),
+                              )
+                            }
+                          >
+                            {t('填入模板')}
+                          </Text>
+                          <Text
+                            className='!text-semi-color-primary cursor-pointer'
+                            onClick={() =>
+                              formatJsonField('dynamic_model_mapping')
+                            }
+                          >
+                            {t('格式化')}
+                          </Text>
+                          <Text
+                            className='!text-semi-color-primary cursor-pointer'
+                            onClick={() =>
+                              handleInputChange('dynamic_model_mapping', '')
+                            }
+                          >
+                            {t('清空')}
+                          </Text>
+                        </div>
+                      </div>
+                    }
+                    showClear
+                  />
 
                   <Form.TextArea
                     field='header_override'
