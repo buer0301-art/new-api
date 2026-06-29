@@ -1040,7 +1040,6 @@ const EditChannelModal = (props) => {
       const hasAdvancedValues =
         (data.model_mapping && data.model_mapping.trim()) ||
         (data.param_override && data.param_override.trim()) ||
-        (data.dynamic_model_mapping && data.dynamic_model_mapping.trim()) ||
         (data.status_code_mapping && data.status_code_mapping.trim()) ||
         (data.header_override && data.header_override.trim()) ||
         (data.tag && data.tag.trim()) ||
@@ -2407,63 +2406,6 @@ const EditChannelModal = (props) => {
                   </div>
 
                   <Form.TextArea
-                    field='dynamic_model_mapping'
-                    label={t('动态模型映射')}
-                    placeholder={JSON.stringify(
-                      DYNAMIC_MODEL_MAPPING_EXAMPLE,
-                      null,
-                      2,
-                    )}
-                    autosize
-                    onChange={(value) =>
-                      handleInputChange('dynamic_model_mapping', value)
-                    }
-                    extraText={
-                      <div className='flex flex-col gap-1'>
-                        <Text type='tertiary' size='small'>
-                          {t(
-                            '根据请求参数选择上游模型，并可按配置转换字段类型。',
-                          )}
-                        </Text>
-                        <div className='flex gap-2 flex-wrap items-center'>
-                          <Text
-                            className='!text-semi-color-primary cursor-pointer'
-                            onClick={() =>
-                              handleInputChange(
-                                'dynamic_model_mapping',
-                                JSON.stringify(
-                                  DYNAMIC_MODEL_MAPPING_EXAMPLE,
-                                  null,
-                                  2,
-                                ),
-                              )
-                            }
-                          >
-                            {t('填入模板')}
-                          </Text>
-                          <Text
-                            className='!text-semi-color-primary cursor-pointer'
-                            onClick={() =>
-                              formatJsonField('dynamic_model_mapping')
-                            }
-                          >
-                            {t('格式化')}
-                          </Text>
-                          <Text
-                            className='!text-semi-color-primary cursor-pointer'
-                            onClick={() =>
-                              handleInputChange('dynamic_model_mapping', '')
-                            }
-                          >
-                            {t('清空')}
-                          </Text>
-                        </div>
-                      </div>
-                    }
-                    showClear
-                  />
-
-                  <Form.TextArea
                     field='header_override'
                     label={t('请求头覆盖')}
                     placeholder={
@@ -3720,6 +3662,63 @@ const EditChannelModal = (props) => {
                     extraText={t(
                       '键为请求中的模型名称，值为要替换的模型名称',
                     )}
+                  />
+
+                  <Form.TextArea
+                    field='dynamic_model_mapping'
+                    label={t('动态模型映射')}
+                    placeholder={JSON.stringify(
+                      DYNAMIC_MODEL_MAPPING_EXAMPLE,
+                      null,
+                      2,
+                    )}
+                    autosize
+                    onChange={(value) =>
+                      handleInputChange('dynamic_model_mapping', value)
+                    }
+                    extraText={
+                      <div className='flex flex-col gap-1'>
+                        <Text type='tertiary' size='small'>
+                          {t(
+                            '根据请求参数选择上游模型，并可按配置转换字段类型。',
+                          )}
+                        </Text>
+                        <div className='flex gap-2 flex-wrap items-center'>
+                          <Text
+                            className='!text-semi-color-primary cursor-pointer'
+                            onClick={() =>
+                              handleInputChange(
+                                'dynamic_model_mapping',
+                                JSON.stringify(
+                                  DYNAMIC_MODEL_MAPPING_EXAMPLE,
+                                  null,
+                                  2,
+                                ),
+                              )
+                            }
+                          >
+                            {t('填入模板')}
+                          </Text>
+                          <Text
+                            className='!text-semi-color-primary cursor-pointer'
+                            onClick={() =>
+                              formatJsonField('dynamic_model_mapping')
+                            }
+                          >
+                            {t('格式化')}
+                          </Text>
+                          <Text
+                            className='!text-semi-color-primary cursor-pointer'
+                            onClick={() =>
+                              handleInputChange('dynamic_model_mapping', '')
+                            }
+                          >
+                            {t('清空')}
+                          </Text>
+                        </div>
+                      </div>
+                    }
+                    showClear
                   />
 
                   {/* Auto Ban - Core Config */}
