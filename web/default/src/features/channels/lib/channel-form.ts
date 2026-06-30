@@ -108,9 +108,18 @@ function isDynamicModelMapping(value: unknown): boolean {
       if (!Array.isArray(rule.field_transforms)) return false
       const validTransforms = rule.field_transforms.every((transform) => {
         if (!isJsonObjectValue(transform)) return false
-        return (
-          typeof transform.path === 'string' && typeof transform.to === 'string'
-        )
+        if (typeof transform.path !== 'string') return false
+        if ('to' in transform && typeof transform.to !== 'string') return false
+        if (
+          'target_path' in transform &&
+          typeof transform.target_path !== 'string'
+        ) {
+          return false
+        }
+        if ('mode' in transform && typeof transform.mode !== 'string') {
+          return false
+        }
+        return true
       })
       if (!validTransforms) return false
     }

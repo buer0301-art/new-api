@@ -66,8 +66,10 @@ type DynamicModelMappingCondition struct {
 }
 
 type DynamicFieldTransform struct {
-	Path string `json:"path,omitempty"`
-	To   string `json:"to,omitempty"`
+	Path       string `json:"path,omitempty"`
+	To         string `json:"to,omitempty"`
+	TargetPath string `json:"target_path,omitempty"`
+	Mode       string `json:"mode,omitempty"`
 }
 
 func (s *ChannelOtherSettings) IsOpenRouterEnterprise() bool {

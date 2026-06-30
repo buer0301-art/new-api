@@ -126,6 +126,8 @@ export interface DynamicModelMappingCondition {
 export interface DynamicFieldTransform {
   path?: string
   to?: string
+  target_path?: string
+  mode?: string
 }
 
 export interface AdvancedCustomConfig {

@@ -171,10 +171,19 @@ func applyDynamicFieldTransforms(body []byte, transforms []dto.DynamicFieldTrans
 	for _, transform := range transforms {
 		path := strings.TrimSpace(transform.Path)
 		to := strings.TrimSpace(transform.To)
-		if path == "" || to == "" {
+		targetPath := strings.TrimSpace(transform.TargetPath)
+		mode := strings.TrimSpace(transform.Mode)
+		if path == "" {
 			continue
 		}
-		if to == "delete" {
+		if mode == "" {
+			if targetPath == "" {
+				mode = "set"
+			} else {
+				mode = "move"
+			}
+		}
+		if to == "delete" || mode == "delete" {
 			nextBody, err = sjson.Delete(nextBody, path)
 			if err != nil {
 				return nil, err
@@ -186,13 +195,33 @@ func applyDynamicFieldTransforms(body []byte, transforms []dto.DynamicFieldTrans
 		if !value.Exists() {
 			continue
 		}
-		converted, ok := convertDynamicFieldValue(value, to)
-		if !ok {
-			return nil, fmt.Errorf("unsupported dynamic field transform type: %s", to)
+		converted := value.Value()
+		if to != "" {
+			var ok bool
+			converted, ok = convertDynamicFieldValue(value, to)
+			if !ok {
+				return nil, fmt.Errorf("unsupported dynamic field transform type: %s", to)
+			}
 		}
-		nextBody, err = sjson.Set(nextBody, path, converted)
+		writePath := path
+		if targetPath != "" {
+			writePath = targetPath
+		}
+		nextBody, err = sjson.Set(nextBody, writePath, converted)
 		if err != nil {
 			return nil, err
+		}
+		switch mode {
+		case "set", "copy":
+		case "move":
+			if writePath != path {
+				nextBody, err = sjson.Delete(nextBody, path)
+				if err != nil {
+					return nil, err
+				}
+			}
+		default:
+			return nil, fmt.Errorf("unsupported dynamic field transform mode: %s", mode)
 		}
 	}
 	return []byte(nextBody), nil

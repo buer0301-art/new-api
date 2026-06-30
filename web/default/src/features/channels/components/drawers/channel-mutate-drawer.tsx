@@ -2895,10 +2895,17 @@ export function ChannelMutateDrawer({
                                   rows={10}
                                   placeholder='[
   {
-    "from": "omni-flash",
-    "to": "omni_flash_1-1",
-    "when": [{ "path": "input_reference", "op": "len_eq", "value": 1 }],
-    "field_transforms": [{ "path": "input_reference", "to": "array" }]
+    "from": "veo-3.1",
+    "to": "veo_3_1-components",
+    "when": [{ "path": "input_reference", "op": "len_gte", "value": 1 }],
+    "field_transforms": [
+      {
+        "path": "input_reference",
+        "to": "array",
+        "target_path": "images",
+        "mode": "move"
+      }
+    ]
   }
 ]'
                                   className='max-h-80 min-h-48 resize-y overflow-auto font-mono text-xs'
