@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql/driver"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -64,7 +65,7 @@ type Task struct {
 	Username   string                `json:"username,omitempty" gorm:"-"`
 	// 禁止返回给用户，内部可能包含key等隐私信息
 	PrivateData TaskPrivateData `json:"-" gorm:"column:private_data;type:json"`
-	Data        json.RawMessage `json:"data" gorm:"type:json"`
+	Data        json.RawMessage `json:"data" gorm:"serializer:json;type:json"`
 }
 
 func (t *Task) SetData(data any) {
@@ -83,7 +84,10 @@ type Properties struct {
 }
 
 func (m *Properties) Scan(val interface{}) error {
-	bytesValue, _ := val.([]byte)
+	bytesValue, err := scanTaskJSONValue(val)
+	if err != nil {
+		return err
+	}
 	if len(bytesValue) == 0 {
 		*m = Properties{}
 		return nil
@@ -147,8 +151,12 @@ func GenerateTaskID() string {
 }
 
 func (p *TaskPrivateData) Scan(val interface{}) error {
-	bytesValue, _ := val.([]byte)
+	bytesValue, err := scanTaskJSONValue(val)
+	if err != nil {
+		return err
+	}
 	if len(bytesValue) == 0 {
+		*p = TaskPrivateData{}
 		return nil
 	}
 	return common.Unmarshal(bytesValue, p)
@@ -159,6 +167,19 @@ func (p TaskPrivateData) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return common.Marshal(p)
+}
+
+func scanTaskJSONValue(val interface{}) ([]byte, error) {
+	switch v := val.(type) {
+	case nil:
+		return nil, nil
+	case []byte:
+		return v, nil
+	case string:
+		return []byte(v), nil
+	default:
+		return nil, fmt.Errorf("unsupported JSON value type %T", val)
+	}
 }
 
 // SyncTaskQueryParams 用于包含所有搜索条件的结构体，可以根据需求添加更多字段

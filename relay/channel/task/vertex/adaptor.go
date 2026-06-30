@@ -130,7 +130,7 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 	req := v.(relaycommon.TaskSubmitReq)
 
 	seconds := geminitask.ResolveVeoDuration(req.Metadata, req.Duration, req.Seconds)
-	resolution := geminitask.ResolveVeoResolution(req.Metadata, req.Size)
+	resolution := geminitask.ResolveVeoResolution(req.Metadata, req.Resolution, req.Size)
 	resRatio := geminitask.VeoResolutionRatio(info.UpstreamModelName, resolution)
 
 	return map[string]float64{
@@ -147,31 +147,14 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	}
 	req := v.(relaycommon.TaskSubmitReq)
 
-	instance := geminitask.VeoInstance{Prompt: req.Prompt}
-	if img := geminitask.ExtractMultipartImage(c, info); img != nil {
-		instance.Image = img
-	} else if len(req.Images) > 0 {
-		if parsed := geminitask.ParseImageInput(req.Images[0]); parsed != nil {
-			instance.Image = parsed
-			info.Action = constant.TaskActionGenerate
-		}
+	instance, err := geminitask.BuildVeoInstance(c, info, req)
+	if err != nil {
+		return nil, fmt.Errorf("build veo instance failed: %w", err)
 	}
-
-	params := &geminitask.VeoParameters{}
-	if err := taskcommon.UnmarshalMetadata(req.Metadata, params); err != nil {
-		return nil, fmt.Errorf("unmarshal metadata failed: %w", err)
+	params, err := geminitask.BuildVeoParameters(req)
+	if err != nil {
+		return nil, fmt.Errorf("build veo parameters failed: %w", err)
 	}
-	if params.DurationSeconds == 0 && req.Duration > 0 {
-		params.DurationSeconds = req.Duration
-	}
-	if params.Resolution == "" && req.Size != "" {
-		params.Resolution = geminitask.SizeToVeoResolution(req.Size)
-	}
-	if params.AspectRatio == "" && req.Size != "" {
-		params.AspectRatio = geminitask.SizeToVeoAspectRatio(req.Size)
-	}
-	params.Resolution = strings.ToLower(params.Resolution)
-	params.SampleCount = 1
 
 	body := geminitask.VeoRequestPayload{
 		Instances:  []geminitask.VeoInstance{instance},

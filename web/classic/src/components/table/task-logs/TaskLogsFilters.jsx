@@ -74,6 +74,16 @@ const TaskLogsFilters = ({
             size='small'
           />
 
+          {/* Request ID */}
+          <Form.Input
+            field='request_id'
+            prefix={<IconSearch />}
+            placeholder={t('Request ID')}
+            showClear
+            pure
+            size='small'
+          />
+
           {/* 渠道 ID - 仅管理员可见 */}
           {isAdminUser && (
             <Form.Input

@@ -1,9 +1,17 @@
 /* ==================== Tailwind CSS 配置 ==================== */
 @layer tailwind-base, semi, tailwind-components, tailwind-utils;
 
-@import 'tailwindcss/preflight' layer(tailwind-base);
-@import 'tailwindcss/theme' layer(tailwind-base);
-@import 'tailwindcss/utilities' layer(tailwind-utils);
+@layer tailwind-base {
+  @tailwind base;
+}
+
+@layer tailwind-components {
+  @tailwind components;
+}
+
+@layer tailwind-utils {
+  @tailwind utilities;
+}
 
 /* ==================== 全局基础样式 ==================== */
 *,

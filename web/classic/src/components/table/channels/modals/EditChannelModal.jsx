@@ -98,6 +98,12 @@ const STATUS_CODE_MAPPING_EXAMPLE = {
 const DYNAMIC_MODEL_MAPPING_EXAMPLE = [
   {
     from: 'veo-3.1',
+    to: 'veo_3_1-fl',
+    when: [{ path: 'images', op: 'len_gte', value: 1 }],
+    field_transforms: [{ path: 'images', to: 'array' }],
+  },
+  {
+    from: 'veo-3.1',
     to: 'veo_3_1-components',
     when: [{ path: 'input_reference', op: 'len_gte', value: 1 }],
     field_transforms: [

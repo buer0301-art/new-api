@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/QuantumNous/new-api/constant"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -44,7 +44,7 @@ func ExtractMultipartImage(c *gin.Context, info *relaycommon.RelayInfo) *VeoImag
 		mimeType = http.DetectContentType(fileBytes)
 	}
 
-	info.Action = constant.TaskActionGenerate
+	markGenerateAction(info)
 	return &VeoImageInput{
 		BytesBase64Encoded: base64.StdEncoding.EncodeToString(fileBytes),
 		MimeType:           mimeType,
@@ -53,7 +53,6 @@ func ExtractMultipartImage(c *gin.Context, info *relaycommon.RelayInfo) *VeoImag
 
 // ParseImageInput parses an image string (data URI or raw base64) into a
 // VeoImageInput. Returns nil if the input is empty or invalid.
-// TODO: support downloading HTTP URL images and converting to base64
 func ParseImageInput(imageStr string) *VeoImageInput {
 	imageStr = strings.TrimSpace(imageStr)
 	if imageStr == "" {
@@ -62,6 +61,16 @@ func ParseImageInput(imageStr string) *VeoImageInput {
 
 	if strings.HasPrefix(imageStr, "data:") {
 		return parseDataURI(imageStr)
+	}
+	if strings.HasPrefix(imageStr, "http://") || strings.HasPrefix(imageStr, "https://") {
+		mimeType, data, err := service.GetImageFromUrl(imageStr)
+		if err != nil {
+			return nil
+		}
+		return &VeoImageInput{
+			BytesBase64Encoded: data,
+			MimeType:           mimeType,
+		}
 	}
 
 	raw, err := base64.StdEncoding.DecodeString(imageStr)

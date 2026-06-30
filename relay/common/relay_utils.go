@@ -86,22 +86,42 @@ func validateMultipartTaskRequest(c *gin.Context, info *RelayInfo, action string
 
 	formData := c.Request.PostForm
 	req = TaskSubmitReq{
-		Prompt:   formData.Get("prompt"),
-		Model:    formData.Get("model"),
-		Mode:     formData.Get("mode"),
-		Image:    formData.Get("image"),
-		Size:     formData.Get("size"),
-		Metadata: make(map[string]interface{}),
+		Prompt:      formData.Get("prompt"),
+		Model:       formData.Get("model"),
+		Mode:        formData.Get("mode"),
+		Image:       formData.Get("image"),
+		Size:        formData.Get("size"),
+		Resolution:  formData.Get("resolution"),
+		AspectRatio: formData.Get("aspect_ratio"),
+		Metadata:    make(map[string]interface{}),
 	}
 
-	if durationStr := formData.Get("seconds"); durationStr != "" {
+	if durationStr := formData.Get("duration"); durationStr != "" {
 		if duration, err := strconv.Atoi(durationStr); err == nil {
 			req.Duration = duration
 		}
 	}
+	if durationStr := formData.Get("seconds"); durationStr != "" {
+		if duration, err := strconv.Atoi(durationStr); err == nil {
+			if req.Duration == 0 {
+				req.Duration = duration
+			}
+		}
+	}
+	req.Seconds = formData.Get("seconds")
+	req.FirstLastFrame = strings.EqualFold(formData.Get("first_last_frame"), "true")
 
 	if images := formData["images"]; len(images) > 0 {
 		req.Images = images
+	}
+	if refs := formData["input_reference"]; len(refs) > 0 {
+		out := make([]string, 0, len(refs))
+		for _, ref := range refs {
+			if trimmed := strings.TrimSpace(ref); trimmed != "" {
+				out = append(out, trimmed)
+			}
+		}
+		req.InputReference = out
 	}
 
 	for key, values := range formData {
@@ -183,14 +203,18 @@ func ValidateMultipartDirect(c *gin.Context, info *RelayInfo) *dto.TaskError {
 
 func isKnownTaskField(field string) bool {
 	knownFields := map[string]bool{
-		"prompt":          true,
-		"model":           true,
-		"mode":            true,
-		"image":           true,
-		"images":          true,
-		"size":            true,
-		"duration":        true,
-		"input_reference": true, // Sora 特有字段
+		"prompt":           true,
+		"model":            true,
+		"mode":             true,
+		"image":            true,
+		"images":           true,
+		"size":             true,
+		"duration":         true,
+		"seconds":          true,
+		"resolution":       true,
+		"aspect_ratio":     true,
+		"first_last_frame": true,
+		"input_reference":  true,
 	}
 	return knownFields[field]
 }
@@ -218,7 +242,13 @@ func ValidateBasicTaskRequest(c *gin.Context, info *RelayInfo, action string) *d
 		// 兼容单图上传
 		req.Images = []string{req.Image}
 	}
+	hasInputReference := len(req.InputReference.NonEmpty()) > 0
 
-	storeTaskRequest(c, info, action, req)
+	resolvedAction := action
+	if req.HasImage() || hasInputReference {
+		resolvedAction = constant.TaskActionGenerate
+	}
+
+	storeTaskRequest(c, info, resolvedAction, req)
 	return nil
 }

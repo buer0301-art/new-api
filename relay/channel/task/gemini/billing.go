@@ -11,18 +11,24 @@ func ParseVeoDurationSeconds(metadata map[string]any) int {
 	if metadata == nil {
 		return 8
 	}
-	v, ok := metadata["durationSeconds"]
-	if !ok {
-		return 8
-	}
-	switch n := v.(type) {
-	case float64:
-		if int(n) > 0 {
-			return int(n)
+	for _, key := range []string{"durationSeconds", "duration_seconds"} {
+		v, ok := metadata[key]
+		if !ok {
+			continue
 		}
-	case int:
-		if n > 0 {
-			return n
+		switch n := v.(type) {
+		case float64:
+			if int(n) > 0 {
+				return int(n)
+			}
+		case int:
+			if n > 0 {
+				return n
+			}
+		case string:
+			if parsed, err := strconv.Atoi(strings.TrimSpace(n)); err == nil && parsed > 0 {
+				return parsed
+			}
 		}
 	}
 	return 8
@@ -44,11 +50,27 @@ func ParseVeoResolution(metadata map[string]any) string {
 	return "720p"
 }
 
+func ParseVeoAspectRatio(metadata map[string]any) string {
+	if metadata == nil {
+		return ""
+	}
+	for _, key := range []string{"aspectRatio", "aspect_ratio"} {
+		v, ok := metadata[key]
+		if !ok {
+			continue
+		}
+		if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+			return strings.TrimSpace(s)
+		}
+	}
+	return ""
+}
+
 // ResolveVeoDuration returns the effective duration in seconds.
 // Priority: metadata["durationSeconds"] > stdDuration > stdSeconds > default (8).
 func ResolveVeoDuration(metadata map[string]any, stdDuration int, stdSeconds string) int {
 	if metadata != nil {
-		if _, exists := metadata["durationSeconds"]; exists {
+		if _, exists := metadata["durationSeconds"]; exists || metadata["duration_seconds"] != nil {
 			if d := ParseVeoDurationSeconds(metadata); d > 0 {
 				return d
 			}
@@ -64,8 +86,8 @@ func ResolveVeoDuration(metadata map[string]any, stdDuration int, stdSeconds str
 }
 
 // ResolveVeoResolution returns the effective resolution string (lowercase).
-// Priority: metadata["resolution"] > SizeToVeoResolution(stdSize) > default ("720p").
-func ResolveVeoResolution(metadata map[string]any, stdSize string) string {
+// Priority: metadata["resolution"] > stdResolution > SizeToVeoResolution(stdSize) > default ("720p").
+func ResolveVeoResolution(metadata map[string]any, stdResolution, stdSize string) string {
 	if metadata != nil {
 		if _, exists := metadata["resolution"]; exists {
 			if r := ParseVeoResolution(metadata); r != "" {
@@ -73,10 +95,28 @@ func ResolveVeoResolution(metadata map[string]any, stdSize string) string {
 			}
 		}
 	}
+	if strings.TrimSpace(stdResolution) != "" {
+		return strings.ToLower(strings.TrimSpace(stdResolution))
+	}
 	if stdSize != "" {
 		return SizeToVeoResolution(stdSize)
 	}
 	return "720p"
+}
+
+func ResolveVeoAspectRatio(metadata map[string]any, stdAspectRatio, stdSize string) string {
+	if metadata != nil {
+		if ratio := ParseVeoAspectRatio(metadata); ratio != "" {
+			return ratio
+		}
+	}
+	if strings.TrimSpace(stdAspectRatio) != "" {
+		return strings.TrimSpace(stdAspectRatio)
+	}
+	if stdSize != "" {
+		return SizeToVeoAspectRatio(stdSize)
+	}
+	return "16:9"
 }
 
 // SizeToVeoResolution converts a "WxH" size string to a Veo resolution label.

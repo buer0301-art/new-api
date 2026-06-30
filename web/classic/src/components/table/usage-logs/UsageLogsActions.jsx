@@ -39,6 +39,8 @@ const LogsActions = ({
     <Space>
       <Skeleton.Title style={{ width: 108, height: 21, borderRadius: 6 }} />
       <Skeleton.Title style={{ width: 108, height: 21, borderRadius: 6 }} />
+      <Skeleton.Title style={{ width: 116, height: 21, borderRadius: 6 }} />
+      <Skeleton.Title style={{ width: 116, height: 21, borderRadius: 6 }} />
       <Skeleton.Title style={{ width: 65, height: 21, borderRadius: 6 }} />
       <Skeleton.Title style={{ width: 64, height: 21, borderRadius: 6 }} />
     </Space>
@@ -69,6 +71,28 @@ const LogsActions = ({
             className='!rounded-lg'
           >
             {t('消耗Token')}: {formatTokenCount(stat.token)}
+          </Tag>
+          <Tag
+            color='cyan'
+            style={{
+              fontWeight: 500,
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+              padding: 13,
+            }}
+            className='!rounded-lg'
+          >
+            {t('缓存读')}: {formatTokenCount(stat.cache_read_token || 0)}
+          </Tag>
+          <Tag
+            color='green'
+            style={{
+              fontWeight: 500,
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+              padding: 13,
+            }}
+            className='!rounded-lg'
+          >
+            {t('缓存写')}: {formatTokenCount(stat.cache_write_token || 0)}
           </Tag>
           <Tag
             color='pink'

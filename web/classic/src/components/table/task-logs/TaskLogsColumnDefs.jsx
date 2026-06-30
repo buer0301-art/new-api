@@ -348,6 +348,26 @@ export const getTaskLogsColumns = ({
       },
     },
     {
+      key: COLUMN_KEYS.REQUEST_ID,
+      title: t('Request ID'),
+      dataIndex: 'request_id',
+      render: (text) => {
+        if (!text) {
+          return '-';
+        }
+        return (
+          <Typography.Text
+            ellipsis={{ showTooltip: true }}
+            onClick={() => {
+              copyText(text);
+            }}
+          >
+            <div>{text}</div>
+          </Typography.Text>
+        );
+      },
+    },
+    {
       key: COLUMN_KEYS.TASK_STATUS,
       title: t('任务状态'),
       dataIndex: 'status',

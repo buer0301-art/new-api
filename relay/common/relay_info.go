@@ -739,6 +739,9 @@ type TaskSubmitReq struct {
 	Size           string                 `json:"size,omitempty"`
 	Duration       int                    `json:"duration,omitempty"`
 	Seconds        string                 `json:"seconds,omitempty"`
+	Resolution     string                 `json:"resolution,omitempty"`
+	AspectRatio    string                 `json:"aspect_ratio,omitempty"`
+	FirstLastFrame bool                   `json:"first_last_frame,omitempty"`
 	InputReference FlexibleStringArray    `json:"input_reference,omitempty"`
 	Metadata       map[string]interface{} `json:"metadata,omitempty"`
 }
@@ -748,7 +751,7 @@ func (t *TaskSubmitReq) GetPrompt() string {
 }
 
 func (t *TaskSubmitReq) HasImage() bool {
-	return len(t.Images) > 0
+	return len(t.Images) > 0 || len(t.InputReference.NonEmpty()) > 0 || strings.TrimSpace(t.Image) != ""
 }
 
 func (t *TaskSubmitReq) UnmarshalJSON(data []byte) error {

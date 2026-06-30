@@ -120,6 +120,42 @@ func TestTaskGetAllUserTaskFiltersByRequestId(t *testing.T) {
 	assert.Equal(t, int64(1), TaskCountAllUserTask(1001, queryParams))
 }
 
+func TestTaskGetAllTasksReadsSQLiteTextJSONFields(t *testing.T) {
+	truncateTables(t)
+
+	now := time.Now().Unix()
+	result := DB.Exec(
+		`INSERT INTO tasks (created_at, updated_at, task_id, user_id, channel_id, request_id, status, submit_time, properties, private_data, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		now,
+		now,
+		"task_sqlite_text_json",
+		2001,
+		7,
+		"req-sqlite-text-json",
+		TaskStatusSuccess,
+		now,
+		`{"origin_model_name":"origin-text-json"}`,
+		`{"upstream_task_id":"upstream-text-json","request_id":"req-private-text-json"}`,
+		`{"key":"value"}`,
+	)
+	require.NoError(t, result.Error)
+	require.EqualValues(t, 1, result.RowsAffected)
+
+	queryParams := SyncTaskQueryParams{
+		StartTimestamp: now - 1,
+		EndTimestamp:   now + 1,
+	}
+
+	tasks := TaskGetAllTasks(0, 10, queryParams)
+	require.Len(t, tasks, 1)
+	assert.Equal(t, "task_sqlite_text_json", tasks[0].TaskID)
+	assert.Equal(t, "origin-text-json", tasks[0].Properties.OriginModelName)
+	assert.Equal(t, "upstream-text-json", tasks[0].PrivateData.UpstreamTaskID)
+	assert.Equal(t, "req-private-text-json", tasks[0].PrivateData.RequestId)
+	assert.JSONEq(t, `{"key":"value"}`, string(tasks[0].Data))
+	assert.Equal(t, int64(1), TaskCountAllTasks(queryParams))
+}
+
 // ---------------------------------------------------------------------------
 // Snapshot / Equal — pure logic tests (no DB)
 // ---------------------------------------------------------------------------

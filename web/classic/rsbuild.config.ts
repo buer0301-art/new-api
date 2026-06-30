@@ -13,16 +13,40 @@ const semiUiDir = fs.realpathSync(
 const semiDateFnsDir = path.dirname(
   require.resolve('date-fns/package.json', { paths: [semiUiDir] }),
 )
-const resolvePackageDir = (specifier: string) =>
-  fs.realpathSync(path.dirname(require.resolve(`${specifier}/package.json`)))
-const resolveVisActorVChartDep = (specifier: string) =>
-  fs.realpathSync(
-    path.resolve(
-      resolvePackageDir('@visactor/vchart'),
-      'node_modules',
-      specifier,
-    ),
+const packageNameFromSpecifier = (specifier: string) =>
+  specifier.startsWith('@')
+    ? specifier.split('/').slice(0, 2).join('/')
+    : specifier.split('/')[0]
+const resolvePackageDir = (
+  specifier: string,
+  options?: { paths?: string[] },
+) => {
+  const packageName = packageNameFromSpecifier(specifier)
+  let currentDir = fs.realpathSync(
+    path.dirname(require.resolve(specifier, options)),
   )
+
+  while (true) {
+    const packageJsonPath = path.join(currentDir, 'package.json')
+    if (fs.existsSync(packageJsonPath)) {
+      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))
+      if (packageJson.name === packageName) {
+        return currentDir
+      }
+    }
+
+    const parentDir = path.dirname(currentDir)
+    if (parentDir === currentDir) {
+      throw new Error(`Unable to resolve package directory for ${specifier}`)
+    }
+    currentDir = parentDir
+  }
+}
+const vchartDir = resolvePackageDir('@visactor/vchart')
+const resolveVisActorVChartDep = (specifier: string) =>
+  fs.existsSync(path.join(vchartDir, 'node_modules', specifier))
+    ? fs.realpathSync(path.join(vchartDir, 'node_modules', specifier))
+    : resolvePackageDir(specifier, { paths: [vchartDir] })
 const classicVisActorAlias = {
   '@visactor/react-vchart': resolvePackageDir('@visactor/react-vchart'),
   '@visactor/vchart': resolvePackageDir('@visactor/vchart'),

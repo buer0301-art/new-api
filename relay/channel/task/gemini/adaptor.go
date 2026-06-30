@@ -76,31 +76,14 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		return nil, fmt.Errorf("unexpected task_request type")
 	}
 
-	instance := VeoInstance{Prompt: req.Prompt}
-	if img := ExtractMultipartImage(c, info); img != nil {
-		instance.Image = img
-	} else if len(req.Images) > 0 {
-		if parsed := ParseImageInput(req.Images[0]); parsed != nil {
-			instance.Image = parsed
-			info.Action = constant.TaskActionGenerate
-		}
+	instance, err := BuildVeoInstance(c, info, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "build veo instance failed")
 	}
-
-	params := &VeoParameters{}
-	if err := taskcommon.UnmarshalMetadata(req.Metadata, params); err != nil {
-		return nil, errors.Wrap(err, "unmarshal metadata failed")
+	params, err := BuildVeoParameters(req)
+	if err != nil {
+		return nil, errors.Wrap(err, "build veo parameters failed")
 	}
-	if params.DurationSeconds == 0 && req.Duration > 0 {
-		params.DurationSeconds = req.Duration
-	}
-	if params.Resolution == "" && req.Size != "" {
-		params.Resolution = SizeToVeoResolution(req.Size)
-	}
-	if params.AspectRatio == "" && req.Size != "" {
-		params.AspectRatio = SizeToVeoAspectRatio(req.Size)
-	}
-	params.Resolution = strings.ToLower(params.Resolution)
-	params.SampleCount = 1
 
 	body := VeoRequestPayload{
 		Instances:  []VeoInstance{instance},
@@ -169,7 +152,7 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 	}
 
 	seconds := ResolveVeoDuration(req.Metadata, req.Duration, req.Seconds)
-	resolution := ResolveVeoResolution(req.Metadata, req.Size)
+	resolution := ResolveVeoResolution(req.Metadata, req.Resolution, req.Size)
 	resRatio := VeoResolutionRatio(info.UpstreamModelName, resolution)
 
 	return map[string]float64{
