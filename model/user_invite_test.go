@@ -97,3 +97,81 @@ func TestUserInsertWithTxRecordsInviterRelationship(t *testing.T) {
 	require.NoError(t, DB.First(&createdInvitee, invitee.Id).Error)
 	assert.Equal(t, inviter.Id, createdInvitee.InviterId)
 }
+
+func TestUserSetInviterRecordsRelationshipAndRewards(t *testing.T) {
+	truncateTables(t)
+	withInviteSettings(t, 15, 7)
+
+	inviter := User{
+		Username:    "set_inviter_user",
+		Password:    "password123",
+		DisplayName: "set_inviter_user",
+		Role:        common.RoleCommonUser,
+		Status:      common.UserStatusEnabled,
+		AffCode:     "siu1",
+	}
+	require.NoError(t, DB.Create(&inviter).Error)
+
+	invitee := User{
+		Username:    "set_invitee_user",
+		Password:    "password123",
+		DisplayName: "set_invitee_user",
+		Role:        common.RoleCommonUser,
+		Status:      common.UserStatusEnabled,
+		AffCode:     "siv1",
+	}
+	require.NoError(t, DB.Create(&invitee).Error)
+
+	require.NoError(t, invitee.SetInviter(inviter.Id))
+
+	var updatedInvitee User
+	require.NoError(t, DB.First(&updatedInvitee, invitee.Id).Error)
+	assert.Equal(t, inviter.Id, updatedInvitee.InviterId)
+	assert.Equal(t, 7, updatedInvitee.Quota)
+
+	var updatedInviter User
+	require.NoError(t, DB.First(&updatedInviter, inviter.Id).Error)
+	assert.Equal(t, 1, updatedInviter.AffCount)
+	assert.Equal(t, 15, updatedInviter.AffQuota)
+	assert.Equal(t, 15, updatedInviter.AffHistoryQuota)
+}
+
+func TestUserSetInviterRejectsExistingInviter(t *testing.T) {
+	truncateTables(t)
+	withInviteSettings(t, 0, 0)
+
+	firstInviter := User{
+		Username:    "first_inviter",
+		Password:    "password123",
+		DisplayName: "first_inviter",
+		Role:        common.RoleCommonUser,
+		Status:      common.UserStatusEnabled,
+		AffCode:     "fiv1",
+	}
+	require.NoError(t, DB.Create(&firstInviter).Error)
+
+	secondInviter := User{
+		Username:    "second_inviter",
+		Password:    "password123",
+		DisplayName: "second_inviter",
+		Role:        common.RoleCommonUser,
+		Status:      common.UserStatusEnabled,
+		AffCode:     "siv2",
+	}
+	require.NoError(t, DB.Create(&secondInviter).Error)
+
+	invitee := User{
+		Username:    "existing_invitee",
+		Password:    "password123",
+		DisplayName: "existing_invitee",
+		Role:        common.RoleCommonUser,
+		Status:      common.UserStatusEnabled,
+		AffCode:     "eiv1",
+	}
+	require.NoError(t, DB.Create(&invitee).Error)
+	require.NoError(t, invitee.SetInviter(firstInviter.Id))
+
+	err := invitee.SetInviter(secondInviter.Id)
+	require.Error(t, err)
+	assert.EqualError(t, err, "inviter already set")
+}

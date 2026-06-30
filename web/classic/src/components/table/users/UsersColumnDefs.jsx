@@ -190,11 +190,22 @@ const renderInviteInfo = (text, record, t) => {
         <Tag color='white' shape='circle' className='!text-xs'>
           {t('收益')}: {renderQuota(record.aff_history_quota)}
         </Tag>
-        <Tag color='white' shape='circle' className='!text-xs'>
-          {record.inviter_id === 0
-            ? t('无邀请人')
-            : `${t('邀请人')}: ${record.inviter_id}`}
-        </Tag>
+        {record.inviter_id === 0 ? (
+          <Tooltip content={t('设置邀请人')} position='top'>
+            <Tag
+              color='white'
+              shape='circle'
+              className='!text-xs cursor-pointer'
+              onClick={() => text.showSetInviterModal(record)}
+            >
+              {t('无邀请人')}
+            </Tag>
+          </Tooltip>
+        ) : (
+          <Tag color='white' shape='circle' className='!text-xs'>
+            {`${t('邀请人')}: ${record.inviter_id}`}
+          </Tag>
+        )}
       </Space>
     </div>
   );
@@ -316,6 +327,7 @@ export const getUsersColumns = ({
   showResetPasskeyModal,
   showResetTwoFAModal,
   showUserSubscriptionsModal,
+  showSetInviterModal,
 }) => {
   return [
     {
@@ -355,7 +367,8 @@ export const getUsersColumns = ({
     {
       title: t('邀请信息'),
       dataIndex: 'invite',
-      render: (text, record, index) => renderInviteInfo(text, record, t),
+      render: (text, record, index) =>
+        renderInviteInfo({ showSetInviterModal }, record, t),
     },
     {
       title: t('创建时间'),

@@ -349,6 +349,86 @@ func inviteUser(inviterId int, quota int) (err error) {
 	return DB.Save(user).Error
 }
 
+func (user *User) SetInviter(inviterId int) error {
+	if user.Id == 0 {
+		return errors.New("user id is empty")
+	}
+	if inviterId == 0 {
+		return errors.New("inviter id is empty")
+	}
+	if inviterId == user.Id {
+		return errors.New("inviter cannot be the current user")
+	}
+
+	var currentUser User
+	var inviter User
+	inviteeQuota := 0
+	inviterQuota := 0
+	relationshipCreated := false
+
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.First(&currentUser, "id = ?", user.Id).Error; err != nil {
+			return err
+		}
+		if currentUser.InviterId != 0 {
+			if currentUser.InviterId == inviterId {
+				return nil
+			}
+			return errors.New("inviter already set")
+		}
+		if err := tx.First(&inviter, "id = ?", inviterId).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errors.New("inviter user not found")
+			}
+			return err
+		}
+
+		currentUser.InviterId = inviterId
+		inviter.AffCount++
+		if operation_setting.IsPaymentComplianceConfirmed() {
+			if common.QuotaForInvitee > 0 {
+				inviteeQuota = common.QuotaForInvitee
+				currentUser.Quota += inviteeQuota
+			}
+			if common.QuotaForInviter > 0 {
+				inviterQuota = common.QuotaForInviter
+				inviter.AffQuota += inviterQuota
+				inviter.AffHistoryQuota += inviterQuota
+			}
+		}
+
+		if err := tx.Save(&currentUser).Error; err != nil {
+			return err
+		}
+		if err := tx.Save(&inviter).Error; err != nil {
+			return err
+		}
+
+		relationshipCreated = true
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	user.InviterId = currentUser.InviterId
+	user.Quota = currentUser.Quota
+	if !relationshipCreated {
+		return nil
+	}
+
+	if inviteeQuota > 0 {
+		RecordLog(currentUser.Id, LogTypeSystem, fmt.Sprintf("使用邀请码赠送 %s", logger.LogQuota(inviteeQuota)))
+	}
+	if inviterQuota > 0 {
+		RecordLog(inviter.Id, LogTypeSystem, fmt.Sprintf("邀请用户赠送 %s", logger.LogQuota(inviterQuota)))
+	}
+	if err := updateUserCache(currentUser); err != nil {
+		return err
+	}
+	return updateUserCache(inviter)
+}
+
 func (user *User) TransferAffQuotaToQuota(quota int) error {
 	// 检查quota是否小于最小额度
 	if float64(quota) < common.QuotaPerUnit {

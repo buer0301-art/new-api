@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
@@ -186,6 +187,10 @@ func Register(c *gin.Context) {
 	err := json.NewDecoder(c.Request.Body).Decode(&user)
 	if err != nil {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	if utf8.RuneCountInString(user.Username) > model.UserNameMaxLength {
+		common.ApiErrorI18n(c, i18n.MsgUserUsernameTooLong, map[string]any{"Max": model.UserNameMaxLength})
 		return
 	}
 	if err := common.Validate.Struct(&user); err != nil {
@@ -629,6 +634,8 @@ func UpdateUser(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserCannotCreateHigherLevel)
 		return
 	}
+	inviterId := updatedUser.InviterId
+	updatedUser.InviterId = originUser.InviterId
 	if updatedUser.Password == "$I_LOVE_U" {
 		updatedUser.Password = "" // rollback to what it should be
 	}
@@ -636,6 +643,12 @@ func UpdateUser(c *gin.Context) {
 	if err := updatedUser.Edit(updatePassword); err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	if inviterId > 0 && inviterId != originUser.InviterId {
+		if err := originUser.SetInviter(inviterId); err != nil {
+			common.ApiError(c, err)
+			return
+		}
 	}
 	recordManageAuditFor(c, updatedUser.Id, "user.update", map[string]interface{}{
 		"username": originUser.Username,
