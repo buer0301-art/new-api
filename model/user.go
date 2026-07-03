@@ -1086,6 +1086,14 @@ func UpdateUserUsedQuotaAndRequestCount(id int, quota int) {
 	updateUserUsedQuotaAndRequestCount(id, quota, 1)
 }
 
+func UpdateUserUsedQuota(id int, quota int) {
+	if common.BatchUpdateEnabled {
+		addNewRecord(BatchUpdateTypeUsedQuota, id, quota)
+		return
+	}
+	updateUserUsedQuota(id, quota)
+}
+
 func updateUserUsedQuotaAndRequestCount(id int, quota int, count int) {
 	err := DB.Model(&User{}).Where("id = ?", id).Updates(
 		map[string]interface{}{
@@ -1112,7 +1120,7 @@ func updateUserQuotaUsedQuotaAndRequestCount(id int, quota int, usedQuota int, r
 	err := DB.Model(&User{}).Where("id = ?", id).Updates(
 		map[string]interface{}{
 			"quota":         gorm.Expr("quota + ?", quota),
-			"used_quota":    gorm.Expr("used_quota + ?", usedQuota),
+			"used_quota":    nonNegativeDeltaExpr("used_quota", usedQuota),
 			"request_count": gorm.Expr("request_count + ?", requestCount),
 		},
 	).Error
@@ -1124,12 +1132,19 @@ func updateUserQuotaUsedQuotaAndRequestCount(id int, quota int, usedQuota int, r
 func updateUserUsedQuota(id int, quota int) {
 	err := DB.Model(&User{}).Where("id = ?", id).Updates(
 		map[string]interface{}{
-			"used_quota": gorm.Expr("used_quota + ?", quota),
+			"used_quota": nonNegativeDeltaExpr("used_quota", quota),
 		},
 	).Error
 	if err != nil {
 		common.SysLog("failed to update user used quota: " + err.Error())
 	}
+}
+
+func nonNegativeDeltaExpr(column string, delta int) interface{} {
+	if delta >= 0 {
+		return gorm.Expr(column+" + ?", delta)
+	}
+	return gorm.Expr("CASE WHEN "+column+" + ? < 0 THEN 0 ELSE "+column+" + ? END", delta, delta)
 }
 
 func updateUserRequestCount(id int, count int) {
