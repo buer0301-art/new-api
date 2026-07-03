@@ -409,6 +409,8 @@ func TestRefundTaskQuota_NoToken(t *testing.T) {
 
 	seedUser(t, userID, initQuota)
 	seedChannel(t, channelID)
+	setUserUsedQuota(t, userID, preConsumed)
+	setChannelUsedQuota(t, channelID, preConsumed)
 
 	task := makeTask(userID, channelID, preConsumed, 0, BillingSourceWallet, 0) // TokenId=0
 
@@ -416,6 +418,8 @@ func TestRefundTaskQuota_NoToken(t *testing.T) {
 
 	// User quota refunded
 	assert.Equal(t, initQuota+preConsumed, getUserQuota(t, userID))
+	assert.Equal(t, 0, getUserUsedQuota(t, userID))
+	assert.Equal(t, int64(0), getChannelUsedQuota(t, channelID))
 
 	// Log created
 	log := getLastLog(t)
@@ -553,6 +557,8 @@ func TestRecalculate_Subscription_NegativeDelta(t *testing.T) {
 	seedToken(t, tokenID, userID, "sk-sub-recalc", tokenRemain)
 	seedChannel(t, channelID)
 	seedSubscription(t, subID, userID, subTotal, subUsed)
+	setUserUsedQuota(t, userID, preConsumed)
+	setChannelUsedQuota(t, channelID, preConsumed)
 
 	task := makeTask(userID, channelID, preConsumed, tokenID, BillingSourceSubscription, subID)
 
@@ -560,6 +566,8 @@ func TestRecalculate_Subscription_NegativeDelta(t *testing.T) {
 
 	// Subscription used should decrease by delta (refund 3000)
 	assert.Equal(t, subUsed-int64(preConsumed-actualQuota), getSubscriptionUsed(t, subID))
+	assert.Equal(t, actualQuota, getUserUsedQuota(t, userID))
+	assert.Equal(t, int64(actualQuota), getChannelUsedQuota(t, channelID))
 
 	// Token refunded
 	assert.Equal(t, tokenRemain+(preConsumed-actualQuota), getTokenRemainQuota(t, tokenID))
@@ -636,6 +644,8 @@ func TestCASGuardedRefund_Win(t *testing.T) {
 	seedUser(t, userID, initQuota)
 	seedToken(t, tokenID, userID, "sk-cas-refund-win", tokenRemain)
 	seedChannel(t, channelID)
+	setUserUsedQuota(t, userID, preConsumed)
+	setChannelUsedQuota(t, channelID, preConsumed)
 
 	task := makeTask(userID, channelID, preConsumed, tokenID, BillingSourceWallet, 0)
 	task.Status = model.TaskStatus(model.TaskStatusInProgress)
@@ -651,6 +661,8 @@ func TestCASGuardedRefund_Win(t *testing.T) {
 	// Refund should have happened
 	assert.Equal(t, initQuota+preConsumed, getUserQuota(t, userID))
 	assert.Equal(t, tokenRemain+preConsumed, getTokenRemainQuota(t, tokenID))
+	assert.Equal(t, 0, getUserUsedQuota(t, userID))
+	assert.Equal(t, int64(0), getChannelUsedQuota(t, channelID))
 
 	log := getLastLog(t)
 	require.NotNil(t, log)
@@ -668,6 +680,8 @@ func TestCASGuardedRefund_Lose(t *testing.T) {
 	seedUser(t, userID, initQuota)
 	seedToken(t, tokenID, userID, "sk-cas-refund-lose", tokenRemain)
 	seedChannel(t, channelID)
+	setUserUsedQuota(t, userID, preConsumed)
+	setChannelUsedQuota(t, channelID, preConsumed)
 
 	// Create task with IN_PROGRESS in DB
 	task := makeTask(userID, channelID, preConsumed, tokenID, BillingSourceWallet, 0)
@@ -684,6 +698,8 @@ func TestCASGuardedRefund_Lose(t *testing.T) {
 	// CAS lost: user quota should NOT change (no double refund)
 	assert.Equal(t, initQuota, getUserQuota(t, userID))
 	assert.Equal(t, tokenRemain, getTokenRemainQuota(t, tokenID))
+	assert.Equal(t, preConsumed, getUserUsedQuota(t, userID))
+	assert.Equal(t, int64(preConsumed), getChannelUsedQuota(t, channelID))
 
 	// No billing log should be created
 	assert.Equal(t, int64(0), countLogs(t))
@@ -701,6 +717,8 @@ func TestCASGuardedSettle_Win(t *testing.T) {
 	seedUser(t, userID, initQuota)
 	seedToken(t, tokenID, userID, "sk-cas-settle-win", tokenRemain)
 	seedChannel(t, channelID)
+	setUserUsedQuota(t, userID, preConsumed)
+	setChannelUsedQuota(t, channelID, preConsumed)
 
 	task := makeTask(userID, channelID, preConsumed, tokenID, BillingSourceWallet, 0)
 	task.Status = model.TaskStatus(model.TaskStatusInProgress)
@@ -716,6 +734,8 @@ func TestCASGuardedSettle_Win(t *testing.T) {
 	// Settlement should refund the over-charge (5000 - 3000 = 2000 back to user)
 	assert.Equal(t, initQuota+(preConsumed-actualQuota), getUserQuota(t, userID))
 	assert.Equal(t, tokenRemain+(preConsumed-actualQuota), getTokenRemainQuota(t, tokenID))
+	assert.Equal(t, actualQuota, getUserUsedQuota(t, userID))
+	assert.Equal(t, int64(actualQuota), getChannelUsedQuota(t, channelID))
 
 	// task.Quota should be updated to actualQuota
 	assert.Equal(t, actualQuota, task.Quota)

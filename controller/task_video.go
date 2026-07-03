@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"time"
@@ -153,7 +152,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 		if taskResult.TotalTokens > 0 {
 			// 获取模型名称
 			var taskData map[string]interface{}
-			if err := json.Unmarshal(task.Data, &taskData); err == nil {
+			if err := common.Unmarshal(task.Data, &taskData); err == nil {
 				if modelName, ok := taskData["model"].(string); ok && modelName != "" {
 					// 获取模型价格和倍率
 					modelRatio, hasRatioSetting, _ := ratio_setting.GetModelRatio(modelName)
@@ -197,7 +196,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 								if err := model.DecreaseUserQuota(task.UserId, quotaDelta, false); err != nil {
 									logger.LogError(ctx, fmt.Sprintf("补扣费失败: %s", err.Error()))
 								} else {
-									model.UpdateUserUsedQuotaAndRequestCount(task.UserId, quotaDelta)
+									model.UpdateUserUsedQuota(task.UserId, quotaDelta)
 									model.UpdateChannelUsedQuota(task.ChannelId, quotaDelta)
 									task.Quota = actualQuota // 更新任务记录的实际扣费额度
 
@@ -220,6 +219,8 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 								if err := model.IncreaseUserQuota(task.UserId, refundQuota, false); err != nil {
 									logger.LogError(ctx, fmt.Sprintf("退还预扣费失败: %s", err.Error()))
 								} else {
+									model.UpdateUserUsedQuota(task.UserId, quotaDelta)
+									model.UpdateChannelUsedQuota(task.ChannelId, quotaDelta)
 									task.Quota = actualQuota // 更新任务记录的实际扣费额度
 
 									// 记录退款日志
@@ -270,9 +271,12 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 		// 任务失败且之前状态不是失败才退还额度，防止重复退还
 		if err := model.IncreaseUserQuota(task.UserId, quota, false); err != nil {
 			logger.LogWarn(ctx, "Failed to increase user quota: "+err.Error())
+		} else {
+			model.UpdateUserUsedQuota(task.UserId, -quota)
+			model.UpdateChannelUsedQuota(task.ChannelId, -quota)
+			logContent := fmt.Sprintf("Video async task failed %s, refund %s", task.TaskID, logger.LogQuota(quota))
+			model.RecordLog(task.UserId, model.LogTypeSystem, logContent)
 		}
-		logContent := fmt.Sprintf("Video async task failed %s, refund %s", task.TaskID, logger.LogQuota(quota))
-		model.RecordLog(task.UserId, model.LogTypeSystem, logContent)
 	}
 
 	return nil
@@ -280,7 +284,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 
 func redactVideoResponseBody(body []byte) []byte {
 	var m map[string]any
-	if err := json.Unmarshal(body, &m); err != nil {
+	if err := common.Unmarshal(body, &m); err != nil {
 		return body
 	}
 	resp, _ := m["response"].(map[string]any)
@@ -297,7 +301,7 @@ func redactVideoResponseBody(body []byte) []byte {
 			}
 		}
 	}
-	b, err := json.Marshal(m)
+	b, err := common.Marshal(m)
 	if err != nil {
 		return body
 	}

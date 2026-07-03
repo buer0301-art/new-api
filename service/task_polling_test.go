@@ -90,6 +90,35 @@ func (a *taskPollingFetchAdaptor) fetchedTaskIDs() []string {
 	return append([]string(nil), a.taskIDs...)
 }
 
+type sunoPollingAdaptor struct {
+	responses []dto.SunoDataResponse
+}
+
+func (a *sunoPollingAdaptor) Init(_ *relaycommon.RelayInfo) {}
+
+func (a *sunoPollingAdaptor) FetchTask(_ string, _ string, _ map[string]any, _ string) (*http.Response, error) {
+	response := dto.TaskResponse[[]dto.SunoDataResponse]{
+		Code: dto.TaskSuccessCode,
+		Data: a.responses,
+	}
+	responseBody, err := common.Marshal(response)
+	if err != nil {
+		return nil, err
+	}
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(bytes.NewReader(responseBody)),
+	}, nil
+}
+
+func (a *sunoPollingAdaptor) ParseTaskResult([]byte) (*relaycommon.TaskInfo, error) {
+	return &relaycommon.TaskInfo{Status: model.TaskStatusInProgress}, nil
+}
+
+func (a *sunoPollingAdaptor) AdjustBillingOnComplete(_ *model.Task, _ *relaycommon.TaskInfo) int {
+	return 0
+}
+
 func seedTaskPollingChannel(t *testing.T, id int, disableSleep bool) {
 	t.Helper()
 	ch := &model.Channel{
@@ -101,6 +130,20 @@ func seedTaskPollingChannel(t *testing.T, id int, disableSleep bool) {
 	}
 	if disableSleep {
 		ch.SetOtherSettings(dto.ChannelOtherSettings{DisableTaskPollingSleep: true})
+	}
+	require.NoError(t, model.DB.Create(ch).Error)
+}
+
+func seedSunoPollingChannel(t *testing.T, id int) {
+	t.Helper()
+	baseURL := "https://suno.example"
+	ch := &model.Channel{
+		Id:      id,
+		Type:    constant.ChannelTypeSunoAPI,
+		Name:    "suno_polling_channel",
+		Key:     "sk-suno",
+		BaseURL: &baseURL,
+		Status:  common.ChannelStatusEnabled,
 	}
 	require.NoError(t, model.DB.Create(ch).Error)
 }
@@ -123,6 +166,98 @@ func seedPollingTask(t *testing.T, channelID int, publicID string, upstreamID st
 	}
 	require.NoError(t, model.DB.Create(task).Error)
 	return task
+}
+
+func TestUpdateSunoTasksRefundsOnlyAfterCASWin(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	const userID, tokenID, channelID = 401, 401, 401
+	const initQuota, preConsumed = 10000, 4000
+	const tokenRemain = 6000
+	const upstreamID = "suno_upstream_refund_win"
+
+	seedUser(t, userID, initQuota)
+	seedToken(t, tokenID, userID, "sk-suno-win", tokenRemain)
+	seedSunoPollingChannel(t, channelID)
+	setUserUsedQuota(t, userID, preConsumed)
+	setChannelUsedQuota(t, channelID, preConsumed)
+
+	task := makeTask(userID, channelID, preConsumed, tokenID, BillingSourceWallet, 0)
+	task.TaskID = "suno_public_refund_win"
+	task.Platform = constant.TaskPlatformSuno
+	task.PrivateData.UpstreamTaskID = upstreamID
+	require.NoError(t, model.DB.Create(task).Error)
+
+	adaptor := &sunoPollingAdaptor{
+		responses: []dto.SunoDataResponse{{
+			TaskID:     upstreamID,
+			Status:     model.TaskStatusFailure,
+			FailReason: "upstream failed",
+		}},
+	}
+	previousFactory := GetTaskAdaptorFunc
+	GetTaskAdaptorFunc = func(constant.TaskPlatform) TaskPollingAdaptor { return adaptor }
+	t.Cleanup(func() { GetTaskAdaptorFunc = previousFactory })
+
+	err := updateSunoTasks(ctx, channelID, []string{upstreamID}, map[string]*model.Task{
+		upstreamID: task,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, initQuota+preConsumed, getUserQuota(t, userID))
+	assert.Equal(t, tokenRemain+preConsumed, getTokenRemainQuota(t, tokenID))
+	assert.Equal(t, 0, getUserUsedQuota(t, userID))
+	assert.Equal(t, int64(0), getChannelUsedQuota(t, channelID))
+
+	log := getLastLog(t)
+	require.NotNil(t, log)
+	assert.Equal(t, model.LogTypeRefund, log.Type)
+}
+
+func TestUpdateSunoTasksSkipsRefundWhenCASLoses(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	const userID, tokenID, channelID = 402, 402, 402
+	const initQuota, preConsumed = 10000, 4000
+	const tokenRemain = 6000
+	const upstreamID = "suno_upstream_refund_lose"
+
+	seedUser(t, userID, initQuota)
+	seedToken(t, tokenID, userID, "sk-suno-lose", tokenRemain)
+	seedSunoPollingChannel(t, channelID)
+	setUserUsedQuota(t, userID, preConsumed)
+	setChannelUsedQuota(t, channelID, preConsumed)
+
+	task := makeTask(userID, channelID, preConsumed, tokenID, BillingSourceWallet, 0)
+	task.TaskID = "suno_public_refund_lose"
+	task.Platform = constant.TaskPlatformSuno
+	task.PrivateData.UpstreamTaskID = upstreamID
+	require.NoError(t, model.DB.Create(task).Error)
+	require.NoError(t, model.DB.Model(&model.Task{}).Where("id = ?", task.ID).Update("status", model.TaskStatusFailure).Error)
+
+	adaptor := &sunoPollingAdaptor{
+		responses: []dto.SunoDataResponse{{
+			TaskID:     upstreamID,
+			Status:     model.TaskStatusFailure,
+			FailReason: "upstream failed",
+		}},
+	}
+	previousFactory := GetTaskAdaptorFunc
+	GetTaskAdaptorFunc = func(constant.TaskPlatform) TaskPollingAdaptor { return adaptor }
+	t.Cleanup(func() { GetTaskAdaptorFunc = previousFactory })
+
+	err := updateSunoTasks(ctx, channelID, []string{upstreamID}, map[string]*model.Task{
+		upstreamID: task,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, initQuota, getUserQuota(t, userID))
+	assert.Equal(t, tokenRemain, getTokenRemainQuota(t, tokenID))
+	assert.Equal(t, preConsumed, getUserUsedQuota(t, userID))
+	assert.Equal(t, int64(preConsumed), getChannelUsedQuota(t, channelID))
+	assert.Equal(t, int64(0), countLogs(t))
 }
 
 func TestUpdateVideoTasksDefaultSleepWaitsBetweenTasks(t *testing.T) {

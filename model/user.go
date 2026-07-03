@@ -1001,11 +1001,9 @@ func IncreaseUserQuota(id int, quota int, db bool) (err error) {
 	if err = increaseUserQuota(id, quota); err != nil {
 		return err
 	}
-	gopool.Go(func() {
-		if err := invalidateUserCache(id); err != nil {
-			common.SysLog("failed to invalidate user quota cache: " + err.Error())
-		}
-	})
+	if err := invalidateUserCache(id); err != nil {
+		common.SysLog("failed to invalidate user quota cache: " + err.Error())
+	}
 	return nil
 }
 
@@ -1034,11 +1032,9 @@ func DecreaseUserQuota(id int, quota int, db bool) (err error) {
 	if err = decreaseUserQuota(id, quota); err != nil {
 		return err
 	}
-	gopool.Go(func() {
-		if err := invalidateUserCache(id); err != nil {
-			common.SysLog("failed to invalidate user quota cache: " + err.Error())
-		}
-	})
+	if err := invalidateUserCache(id); err != nil {
+		common.SysLog("failed to invalidate user quota cache: " + err.Error())
+	}
 	return nil
 }
 

@@ -390,11 +390,9 @@ func IncreaseTokenQuota(tokenId int, key string, quota int) (err error) {
 		return err
 	}
 	if common.RedisEnabled && key != "" {
-		gopool.Go(func() {
-			if err := cacheDeleteToken(key); err != nil {
-				common.SysLog("failed to invalidate token quota cache: " + err.Error())
-			}
-		})
+		if err := cacheDeleteToken(key); err != nil {
+			common.SysLog("failed to invalidate token quota cache: " + err.Error())
+		}
 	}
 	return nil
 }
@@ -428,11 +426,9 @@ func DecreaseTokenQuota(id int, key string, quota int) (err error) {
 		return err
 	}
 	if common.RedisEnabled && key != "" {
-		gopool.Go(func() {
-			if err := cacheDeleteToken(key); err != nil {
-				common.SysLog("failed to invalidate token quota cache: " + err.Error())
-			}
-		})
+		if err := cacheDeleteToken(key); err != nil {
+			common.SysLog("failed to invalidate token quota cache: " + err.Error())
+		}
 	}
 	return nil
 }
