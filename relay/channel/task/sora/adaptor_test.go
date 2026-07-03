@@ -290,6 +290,113 @@ func TestFetchTaskKeepsInProgressWhenCompletedUsageNotReady(t *testing.T) {
 	assert.Equal(t, []string{"/v1/videos/task_upstream", "/v1/video/generations/task_upstream"}, paths)
 }
 
+func TestFetchTaskUsesVideoGenerationsFailureForPendingGrokTask(t *testing.T) {
+	var paths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		switch r.URL.Path {
+		case "/v1/videos/task_upstream":
+			_, _ = io.WriteString(w, `{
+				"id": "task_upstream",
+				"task_id": "task_upstream",
+				"model": "grok-image-video",
+				"status": "pending",
+				"progress": 56
+			}`)
+		case "/v1/video/generations/task_upstream":
+			_, _ = io.WriteString(w, `{
+				"code": "success",
+				"data": {
+					"id": 37874,
+					"task_id": "task_upstream",
+					"status": "FAILURE",
+					"fail_reason": "任务超时（15分钟）",
+					"progress": "100%"
+				},
+				"id": "task_upstream",
+				"task_id": "task_upstream",
+				"object": "video",
+				"status": "failed",
+				"progress": 100,
+				"error": {
+					"message": "任务超时（15分钟）",
+					"code": "task_failed"
+				}
+			}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	adaptor := &TaskAdaptor{}
+	resp, err := adaptor.FetchTask(server.URL, "sk-test", map[string]any{
+		"task_id": "task_upstream",
+		"billing_context": &model.TaskBillingContext{
+			ModelPrice:      0.75,
+			OriginModelName: "grok-image-video",
+		},
+	}, "")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	got, err := adaptor.ParseTaskResult(body)
+	require.NoError(t, err)
+	assert.Equal(t, model.TaskStatusFailure, got.Status)
+	assert.Equal(t, "任务超时（15分钟）", got.Reason)
+	assert.Equal(t, []string{"/v1/videos/task_upstream", "/v1/video/generations/task_upstream"}, paths)
+}
+
+func TestFetchTaskUsesVideoGenerationsFailureForUnknownGrokTask(t *testing.T) {
+	var paths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		switch r.URL.Path {
+		case "/v1/videos/task_upstream":
+			_, _ = io.WriteString(w, `{
+				"id": "task_upstream",
+				"model": "grok-image-video",
+				"status": "unknown",
+				"progress": 0
+			}`)
+		case "/v1/video/generations/task_upstream":
+			_, _ = io.WriteString(w, `{
+				"status": "failed",
+				"error": {
+					"message": "任务超时（15分钟）",
+					"code": "task_failed"
+				}
+			}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	adaptor := &TaskAdaptor{}
+	resp, err := adaptor.FetchTask(server.URL, "sk-test", map[string]any{
+		"task_id": "task_upstream",
+		"billing_context": &model.TaskBillingContext{
+			ModelPrice:      0.75,
+			OriginModelName: "grok-image-video",
+		},
+	}, "")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	got, err := adaptor.ParseTaskResult(body)
+	require.NoError(t, err)
+	assert.Equal(t, model.TaskStatusFailure, got.Status)
+	assert.Equal(t, "任务超时（15分钟）", got.Reason)
+	assert.Equal(t, []string{"/v1/videos/task_upstream", "/v1/video/generations/task_upstream"}, paths)
+}
+
 func TestFetchTaskSkipsVideoGenerationsFallbackForFixedPrice(t *testing.T) {
 	var paths []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

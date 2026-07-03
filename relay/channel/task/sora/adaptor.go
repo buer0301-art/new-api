@@ -331,22 +331,7 @@ func (a *TaskAdaptor) FetchTask(baseUrl, key string, body map[string]any, proxy 
 	if err != nil {
 		return nil, err
 	}
-	if shouldFetchVideoGenerationsUsage(billingContext) {
-		common.SysLog(fmt.Sprintf(
-			"sora video fetch trace: task=%s fallback_enabled=true model_price=%.6f model_ratio=%.6f per_call=%t",
-			taskID,
-			billingContext.ModelPrice,
-			billingContext.ModelRatio,
-			billingContext.PerCallBilling,
-		))
-		return a.addVideoGenerationsUsageIfNeeded(client, resp, baseUrl, key, taskID)
-	}
-	common.SysLog(fmt.Sprintf(
-		"sora video fetch trace: task=%s fallback_enabled=false billing_context=%s",
-		taskID,
-		common.GetJsonString(billingContext),
-	))
-	return resp, nil
+	return a.addVideoGenerationsUsageIfNeeded(client, resp, baseUrl, key, taskID, billingContext)
 }
 
 func shouldFetchVideoGenerationsUsage(bc *model.TaskBillingContext) bool {
@@ -359,7 +344,7 @@ func shouldFetchVideoGenerationsUsage(bc *model.TaskBillingContext) bool {
 	return bc.ModelRatio > 0 && bc.ModelPrice < 0
 }
 
-func (a *TaskAdaptor) addVideoGenerationsUsageIfNeeded(client *http.Client, resp *http.Response, baseUrl, key, taskID string) (*http.Response, error) {
+func (a *TaskAdaptor) addVideoGenerationsUsageIfNeeded(client *http.Client, resp *http.Response, baseUrl, key, taskID string, billingContext *model.TaskBillingContext) (*http.Response, error) {
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return resp, err
@@ -377,12 +362,21 @@ func (a *TaskAdaptor) addVideoGenerationsUsageIfNeeded(client *http.Client, resp
 	}
 	status := strings.ToLower(strings.TrimSpace(resTask.Status))
 	common.SysLog(fmt.Sprintf(
-		"sora video fallback trace: task=%s primary_status=%s primary_has_usage=%t primary_body_len=%d",
+		"sora video fallback trace: task=%s fallback_enabled=%t primary_status=%s primary_has_usage=%t primary_body_len=%d",
 		taskID,
+		shouldFetchVideoGenerationsUsage(billingContext),
 		status,
 		resTask.hasUsage(),
 		len(respBody),
 	))
+	if shouldFetchVideoGenerationsFailure(status, resTask, billingContext) {
+		if merged, ok := a.mergeVideoGenerationsFailureIfNeeded(client, resp, respBody, baseUrl, key, taskID); ok {
+			return merged, nil
+		}
+	}
+	if !shouldFetchVideoGenerationsUsage(billingContext) {
+		return resp, nil
+	}
 	if status != "completed" && status != "done" && status != "succeeded" && status != "success" && status != "unknown" {
 		return resp, nil
 	}
@@ -456,6 +450,77 @@ func (a *TaskAdaptor) addVideoGenerationsUsageIfNeeded(client *http.Client, resp
 	resp.Body = io.NopCloser(bytes.NewReader(mergedBody))
 	resp.ContentLength = int64(len(mergedBody))
 	return resp, nil
+}
+
+func shouldFetchVideoGenerationsFailure(status string, task responseTask, bc *model.TaskBillingContext) bool {
+	switch status {
+	case "queued", "pending", "processing", "in_progress", "unknown":
+	default:
+		return false
+	}
+	modelName := strings.ToLower(strings.TrimSpace(task.Model))
+	if strings.HasPrefix(modelName, "grok-") {
+		return true
+	}
+	if bc == nil {
+		return false
+	}
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(bc.OriginModelName)), "grok-")
+}
+
+func (a *TaskAdaptor) mergeVideoGenerationsFailureIfNeeded(client *http.Client, resp *http.Response, respBody []byte, baseUrl, key, taskID string) (*http.Response, bool) {
+	usageURI := fmt.Sprintf("%s/v1/video/generations/%s", baseUrl, taskID)
+	usageReq, err := http.NewRequest(http.MethodGet, usageURI, nil)
+	if err != nil {
+		return resp, false
+	}
+	usageReq.Header.Set("Authorization", "Bearer "+key)
+
+	usageResp, err := client.Do(usageReq)
+	if err != nil {
+		common.SysLog(fmt.Sprintf("sora video failure fallback trace: task=%s request_failed err=%v", taskID, err))
+		return resp, false
+	}
+	defer usageResp.Body.Close()
+
+	usageBody, err := io.ReadAll(usageResp.Body)
+	if err != nil {
+		common.SysLog(fmt.Sprintf("sora video failure fallback trace: task=%s read_failed err=%v", taskID, err))
+		return resp, false
+	}
+	status := strings.ToLower(strings.TrimSpace(firstGJSONString(usageBody, "status", "data.status")))
+	common.SysLog(fmt.Sprintf(
+		"sora video failure fallback trace: task=%s usage_status_code=%d usage_status=%s usage_body_len=%d",
+		taskID,
+		usageResp.StatusCode,
+		status,
+		len(usageBody),
+	))
+	if status != "failed" && status != "failure" && status != "cancelled" && status != "canceled" {
+		return resp, false
+	}
+
+	var bodyMap map[string]any
+	if err := common.Unmarshal(respBody, &bodyMap); err != nil {
+		return resp, false
+	}
+	reason := strings.TrimSpace(firstGJSONString(usageBody, "error.message", "data.fail_reason", "data.error.message", "message"))
+	if reason == "" {
+		reason = "task failed"
+	}
+	bodyMap["status"] = "failed"
+	bodyMap["progress"] = 100
+	bodyMap["error"] = map[string]any{
+		"message": reason,
+		"code":    "task_failed",
+	}
+	mergedBody, err := common.Marshal(bodyMap)
+	if err != nil {
+		return resp, false
+	}
+	resp.Body = io.NopCloser(bytes.NewReader(mergedBody))
+	resp.ContentLength = int64(len(mergedBody))
+	return resp, true
 }
 
 func extractVideoGenerationsUsage(body []byte) taskUsage {
