@@ -4,7 +4,18 @@ WORKDIR /build/web
 COPY web/package.json web/bun.lock ./
 COPY web/default/package.json ./default/package.json
 COPY web/classic/package.json ./classic/package.json
-RUN bun install --frozen-lockfile
+RUN set -eux; \
+    for attempt in 1 2 3; do \
+        if bun install --frozen-lockfile --network-concurrency 8 --no-progress --cache-dir /tmp/bun-install-cache; then \
+            break; \
+        fi; \
+        status=$?; \
+        rm -rf /tmp/bun-install-cache node_modules; \
+        if [ "$attempt" = "3" ]; then \
+            exit "$status"; \
+        fi; \
+        sleep $((attempt * 5)); \
+    done
 COPY ./web/default ./default
 COPY ./VERSION /build/VERSION
 RUN cd default && DISABLE_ESLINT_PLUGIN='true' VITE_REACT_APP_VERSION=$(cat /build/VERSION) bun run build
@@ -15,7 +26,18 @@ WORKDIR /build/web
 COPY web/package.json web/bun.lock ./
 COPY web/default/package.json ./default/package.json
 COPY web/classic/package.json ./classic/package.json
-RUN bun install --filter ./classic --frozen-lockfile
+RUN set -eux; \
+    for attempt in 1 2 3; do \
+        if bun install --filter ./classic --frozen-lockfile --network-concurrency 8 --no-progress --cache-dir /tmp/bun-install-cache; then \
+            break; \
+        fi; \
+        status=$?; \
+        rm -rf /tmp/bun-install-cache node_modules; \
+        if [ "$attempt" = "3" ]; then \
+            exit "$status"; \
+        fi; \
+        sleep $((attempt * 5)); \
+    done
 COPY ./web/classic ./classic
 COPY ./VERSION /build/VERSION
 RUN cd classic && VITE_REACT_APP_VERSION=$(cat /build/VERSION) bun run build
