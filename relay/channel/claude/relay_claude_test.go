@@ -11,8 +11,10 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -111,6 +113,48 @@ func TestHandleClaudeResponseData_OpenAIResponsesFormat(t *testing.T) {
 	require.Equal(t, 3, response.Usage.InputTokens)
 	require.Equal(t, 2, response.Usage.OutputTokens)
 	require.Equal(t, 5, response.Usage.TotalTokens)
+}
+
+func TestResponseOpenAI2ClaudeToolUseInputIsObject(t *testing.T) {
+	tests := []struct {
+		name string
+		args string
+		want map[string]interface{}
+	}{
+		{name: "object", args: `{"q":"x"}`, want: map[string]interface{}{"q": "x"}},
+		{name: "empty", args: "", want: map[string]interface{}{}},
+		{name: "invalid", args: "{", want: map[string]interface{}{}},
+		{name: "null", args: "null", want: map[string]interface{}{}},
+		{name: "array", args: `["x"]`, want: map[string]interface{}{}},
+		{name: "string", args: `"x"`, want: map[string]interface{}{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := dto.Message{Role: "assistant"}
+			msg.SetToolCalls([]dto.ToolCallRequest{
+				{
+					ID:   "call_1",
+					Type: "function",
+					Function: dto.FunctionRequest{
+						Name:      "lookup",
+						Arguments: tt.args,
+					},
+				},
+			})
+			resp := service.ResponseOpenAI2Claude(&dto.OpenAITextResponse{
+				Id:    "chatcmpl_1",
+				Model: "gpt-test",
+				Choices: []dto.OpenAITextResponseChoice{
+					{Message: msg, FinishReason: "tool_calls"},
+				},
+			}, nil)
+
+			require.Len(t, resp.Content, 1)
+			assert.Equal(t, "tool_use", resp.Content[0].Type)
+			assert.Equal(t, tt.want, resp.Content[0].Input)
+		})
+	}
 }
 
 func TestFormatClaudeResponseInfo_MessageStart(t *testing.T) {

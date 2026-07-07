@@ -16,10 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { Code2, Eye } from 'lucide-react'
 import { memo, useCallback, useState } from 'react'
 import { type UseFormReturn } from 'react-hook-form'
-import { Code2, Eye } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+
 import { Button } from '@/components/ui/button'
 import {
   Form,
