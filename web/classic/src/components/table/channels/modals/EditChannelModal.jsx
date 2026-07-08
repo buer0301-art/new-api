@@ -1912,6 +1912,9 @@ const EditChannelModal = (props) => {
     delete localInputs.upstream_model_update_last_detected_models;
     delete localInputs.upstream_model_update_ignored_models;
     delete localInputs.dynamic_model_mapping;
+    if (isEdit) {
+      delete localInputs.status;
+    }
 
     let res;
     localInputs.auto_ban = localInputs.auto_ban ? 1 : 0;

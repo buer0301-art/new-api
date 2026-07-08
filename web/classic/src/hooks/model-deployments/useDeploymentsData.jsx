@@ -280,36 +280,6 @@ export const useDeploymentsData = () => {
   };
 
   // Deployment operations
-  const startDeployment = async (deploymentId) => {
-    try {
-      const res = await API.post(`/api/deployments/${deploymentId}/start`);
-      if (res.data.success) {
-        showSuccess(t('部署启动成功'));
-        await refresh();
-      } else {
-        showError(res.data.message);
-      }
-    } catch (error) {
-      console.error(error);
-      showError(t('启动部署失败'));
-    }
-  };
-
-  const restartDeployment = async (deploymentId) => {
-    try {
-      const res = await API.post(`/api/deployments/${deploymentId}/restart`);
-      if (res.data.success) {
-        showSuccess(t('部署重启成功'));
-        await refresh();
-      } else {
-        showError(res.data.message);
-      }
-    } catch (error) {
-      console.error(error);
-      showError(t('重启部署失败'));
-    }
-  };
-
   const deleteDeployment = async (deploymentId) => {
     try {
       const res = await API.delete(`/api/deployments/${deploymentId}`);
@@ -436,13 +406,31 @@ export const useDeploymentsData = () => {
 
     try {
       const ids = selectedKeys.map((deployment) => deployment.id);
-      const res = await API.post('/api/deployments/batch_delete', { ids });
-      if (res.data.success) {
+      const results = await Promise.allSettled(
+        ids.map((id) => API.delete(`/api/deployments/${id}`)),
+      );
+      const failedResults = results.filter(
+        (result) =>
+          result.status === 'rejected' ||
+          !result.value?.data?.success,
+      );
+
+      if (failedResults.length === 0) {
         showSuccess(t('批量删除成功'));
         setSelectedKeys([]);
         await refresh();
       } else {
-        showError(res.data.message);
+        const firstFailure = failedResults[0];
+        const message =
+          firstFailure.status === 'fulfilled'
+            ? firstFailure.value?.data?.message
+            : firstFailure.reason?.message;
+        showError(
+          message ||
+            t('批量删除失败') +
+              ` (${ids.length - failedResults.length}/${ids.length})`,
+        );
+        await refresh();
       }
     } catch (error) {
       console.error(error);
@@ -507,8 +495,6 @@ export const useDeploymentsData = () => {
     handleRow,
 
     // Deployment operations
-    startDeployment,
-    restartDeployment,
     deleteDeployment,
     updateDeploymentName,
     syncDeploymentToChannel,
