@@ -187,14 +187,10 @@ func TestApplyVideoPerRequestPricingWorksWithoutBaseModelPrice(t *testing.T) {
 
 func TestShouldApplyTaskOtherRatiosSkipsFixedPriceTask(t *testing.T) {
 	info := &relaycommon.RelayInfo{
-		PriceData: types.PriceData{
-			UsePrice: true,
-			Quota:    int(common.QuotaPerUnit),
-			OtherRatios: map[string]float64{
-				"seconds": 15,
-				"size":    1,
-			},
-		},
+		PriceData: priceDataWithOtherRatios(true, map[string]float64{
+			"seconds": 15,
+			"size":    1,
+		}),
 	}
 
 	require.False(t, shouldApplyTaskOtherRatios(info, "grok-imagine-video"))
@@ -205,13 +201,9 @@ func TestShouldApplyTaskOtherRatiosSkipsRatioPricedTask(t *testing.T) {
 		ChannelMeta: &relaycommon.ChannelMeta{
 			ChannelType: constant.ChannelTypeOpenAI,
 		},
-		PriceData: types.PriceData{
-			UsePrice: false,
-			Quota:    int(common.QuotaPerUnit),
-			OtherRatios: map[string]float64{
-				"seconds": 15,
-			},
-		},
+		PriceData: priceDataWithOtherRatios(false, map[string]float64{
+			"seconds": 15,
+		}),
 	}
 
 	require.False(t, shouldApplyTaskOtherRatios(info, "sora-2"))
@@ -222,13 +214,9 @@ func TestShouldApplyTaskOtherRatiosKeepsProviderDurationPricing(t *testing.T) {
 		ChannelMeta: &relaycommon.ChannelMeta{
 			ChannelType: constant.ChannelTypeAli,
 		},
-		PriceData: types.PriceData{
-			UsePrice: false,
-			Quota:    int(common.QuotaPerUnit),
-			OtherRatios: map[string]float64{
-				"seconds": 15,
-			},
-		},
+		PriceData: priceDataWithOtherRatios(false, map[string]float64{
+			"seconds": 15,
+		}),
 	}
 
 	require.True(t, shouldApplyTaskOtherRatios(info, "wanx2.1-t2v-turbo"))
@@ -239,16 +227,21 @@ func TestShouldApplyTaskOtherRatiosKeepsDoubaoVideoSeedancePricing(t *testing.T)
 		ChannelMeta: &relaycommon.ChannelMeta{
 			ChannelType: constant.ChannelTypeDoubaoVideo,
 		},
-		PriceData: types.PriceData{
-			UsePrice: false,
-			Quota:    int(common.QuotaPerUnit),
-			OtherRatios: map[string]float64{
-				"seconds": 4,
-			},
-		},
+		PriceData: priceDataWithOtherRatios(false, map[string]float64{
+			"seconds": 4,
+		}),
 	}
 
 	require.True(t, shouldApplyTaskOtherRatios(info, "doubao-seedance-2-0-fast-260128"))
+}
+
+func priceDataWithOtherRatios(usePrice bool, ratios map[string]float64) types.PriceData {
+	priceData := types.PriceData{
+		UsePrice: usePrice,
+		Quota:    int(common.QuotaPerUnit),
+	}
+	priceData.ReplaceOtherRatios(ratios)
+	return priceData
 }
 
 func setupVideoResolutionPricingRules(t *testing.T) {
