@@ -254,10 +254,6 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	if err != nil {
 		return nil, service.TaskErrorWrapper(err, "build_request_failed", http.StatusInternalServerError)
 	}
-	requestBody, err = debugLogTaskUpstreamRequestBody(c, info, platform, requestBody)
-	if err != nil {
-		return nil, service.TaskErrorWrapper(err, "debug_log_request_failed", http.StatusInternalServerError)
-	}
 
 	// 9. 发送请求
 	resp, err := adaptor.DoRequest(c, info, requestBody)
@@ -300,33 +296,6 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 		Platform:       platform,
 		Quota:          finalQuota,
 	}, nil
-}
-
-func debugLogTaskUpstreamRequestBody(c *gin.Context, info *relaycommon.RelayInfo, platform constant.TaskPlatform, requestBody io.Reader) (io.Reader, error) {
-	if requestBody == nil {
-		return nil, nil
-	}
-
-	body, err := io.ReadAll(requestBody)
-	if err != nil {
-		return nil, err
-	}
-
-	// TEMP DEBUG: remove after verifying channel-side video request mapping.
-	common.SysLog(fmt.Sprintf(
-		"[TEMP DEBUG] task upstream request body: channel_id=%d channel_type=%d platform=%s action=%s public_task_id=%s origin_model=%s upstream_model=%s request_path=%s body=%s",
-		info.ChannelId,
-		info.ChannelType,
-		platform,
-		info.Action,
-		info.PublicTaskID,
-		info.OriginModelName,
-		info.UpstreamModelName,
-		c.Request.URL.Path,
-		string(body),
-	))
-
-	return bytes.NewReader(body), nil
 }
 
 func applyVideoPerRequestPricing(c *gin.Context, info *relaycommon.RelayInfo, priceData types.PriceData) (bool, *dto.TaskError) {
