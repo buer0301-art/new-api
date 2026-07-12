@@ -19,6 +19,11 @@ For commercial licensing, please contact support@quantumnous.com
 import { splitBillingExprAndRequestRules } from '@/features/pricing/lib/billing-expr'
 
 import { safeJsonParse } from '../utils/json-parser'
+import {
+  parsePerRequestRules,
+  summarizePerRequestRule,
+  type PerRequestPriceRule,
+} from './per-request-pricing'
 import { formatPricingNumber } from './pricing-format'
 
 export type ModelPricingSnapshotInput = {
@@ -32,6 +37,7 @@ export type ModelPricingSnapshotInput = {
   audioCompletionRatio: string
   billingMode: string
   billingExpr: string
+  perRequestRules: string
 }
 
 export type ModelPricingSnapshot = {
@@ -47,6 +53,7 @@ export type ModelPricingSnapshot = {
   billingMode?: string
   billingExpr?: string
   requestRuleExpr?: string
+  perRequestRule?: PerRequestPriceRule
   hasConflict: boolean
 }
 
@@ -60,6 +67,13 @@ export type ModelRow = ModelPricingSnapshot & {
 
 export const hasPricingValue = (value?: string) =>
   value !== undefined && value !== ''
+
+export const isBasePricingUnset = (snapshot?: ModelPricingSnapshot) =>
+  !snapshot ||
+  (snapshot.billingMode !== 'tiered_expr' &&
+    !snapshot.perRequestRule &&
+    !hasPricingValue(snapshot.price) &&
+    !hasPricingValue(snapshot.ratio))
 
 const toNumberOrNull = (value?: string) => {
   if (!hasPricingValue(value)) return null
@@ -107,6 +121,9 @@ export const getPriceSummary = (
     return getExpressionSummary(row, t)
   }
   if (row.billingMode === 'per-request') {
+    if (row.perRequestRule) {
+      return summarizePerRequestRule(row.perRequestRule, t) || t('Unset price')
+    }
     return row.price ? `$${row.price} / ${t('request')}` : t('Unset price')
   }
 
@@ -168,6 +185,7 @@ export const buildModelSnapshots = ({
   audioCompletionRatio,
   billingMode,
   billingExpr,
+  perRequestRules,
 }: ModelPricingSnapshotInput): ModelPricingSnapshot[] => {
   const priceMap = safeJsonParse<Record<string, number>>(modelPrice, {
     fallback: {},
@@ -209,6 +227,7 @@ export const buildModelSnapshots = ({
     fallback: {},
     context: 'billing expression',
   })
+  const perRequestRuleMap = parsePerRequestRules(perRequestRules)
 
   const modelNames = new Set([
     ...Object.keys(priceMap),
@@ -221,6 +240,7 @@ export const buildModelSnapshots = ({
     ...Object.keys(audioCompletionMap),
     ...Object.keys(billingModeMap),
     ...Object.keys(billingExprMap),
+    ...Object.keys(perRequestRuleMap),
   ])
 
   return Array.from(modelNames).map((name) => {
@@ -232,6 +252,7 @@ export const buildModelSnapshots = ({
     const image = imageMap[name]?.toString() || ''
     const audio = audioMap[name]?.toString() || ''
     const audioCompletion = audioCompletionMap[name]?.toString() || ''
+    const perRequestRule = perRequestRuleMap[name]
 
     const modeForModel = billingModeMap[name]
     if (modeForModel === 'tiered_expr') {
@@ -243,6 +264,7 @@ export const buildModelSnapshots = ({
         billingMode: 'tiered_expr',
         billingExpr: pureExpr,
         requestRuleExpr,
+        perRequestRule,
         price,
         ratio,
         cacheRatio: cache,
@@ -265,7 +287,8 @@ export const buildModelSnapshots = ({
       imageRatio: image,
       audioRatio: audio,
       audioCompletionRatio: audioCompletion,
-      billingMode: price !== '' ? 'per-request' : 'per-token',
+      perRequestRule,
+      billingMode: perRequestRule || price !== '' ? 'per-request' : 'per-token',
       hasConflict:
         price !== '' &&
         (ratio !== '' ||
@@ -293,5 +316,6 @@ export const getSnapshotSignature = (snapshot?: ModelPricingSnapshot) => {
     billingMode: snapshot.billingMode || 'per-token',
     billingExpr: snapshot.billingExpr || '',
     requestRuleExpr: snapshot.requestRuleExpr || '',
+    perRequestRule: snapshot.perRequestRule || null,
   })
 }

@@ -17,8 +17,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertTriangle, ChevronDown } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { AlertTriangle, ChevronDown, Save } from 'lucide-react'
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useState,
+} from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import * as z from 'zod'
@@ -126,10 +133,9 @@ export type ModelRatioData = {
 type ModelPricingSheetProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSave: (data: ModelRatioData) => void
-  onCancel?: () => void
   editData?: ModelRatioData | null
-  selectedTargetCount?: number
+  onSave?: () => void | Promise<void>
+  isSaving?: boolean
 }
 
 type ModelPricingEditorPanelProps = Omit<
@@ -137,6 +143,10 @@ type ModelPricingEditorPanelProps = Omit<
   'open' | 'onOpenChange'
 > & {
   className?: string
+}
+
+export type ModelPricingEditorPanelHandle = {
+  commitDraft: () => Promise<ModelRatioData | null>
 }
 
 type PreviewRow = {
@@ -399,14 +409,13 @@ function buildPreviewRows(
   ]
 }
 
-export function ModelPricingSheet({
-  open,
-  onOpenChange,
-  onSave,
-  onCancel,
-  editData,
-  selectedTargetCount = 0,
-}: ModelPricingSheetProps) {
+export const ModelPricingSheet = forwardRef<
+  ModelPricingEditorPanelHandle,
+  ModelPricingSheetProps
+>(function ModelPricingSheet(
+  { open, onOpenChange, editData, onSave, isSaving },
+  ref
+) {
   const { t } = useTranslation()
   const title = editData ? t('Edit model pricing') : t('Add model pricing')
   const description = editData?.name || t('New model')
@@ -422,27 +431,24 @@ export function ModelPricingSheet({
           <SheetDescription>{description}</SheetDescription>
         </SheetHeader>
         <ModelPricingEditorPanel
-          onSave={onSave}
+          ref={ref}
           editData={editData}
-          selectedTargetCount={selectedTargetCount}
-          onCancel={() => {
-            onCancel?.()
-            onOpenChange(false)
-          }}
+          onSave={onSave}
+          isSaving={isSaving}
           className='h-full rounded-none border-0'
         />
       </SheetContent>
     </Sheet>
   )
-}
+})
 
-export function ModelPricingEditorPanel({
-  onSave,
-  editData,
-  selectedTargetCount = 0,
-  onCancel,
-  className,
-}: ModelPricingEditorPanelProps) {
+export const ModelPricingEditorPanel = forwardRef<
+  ModelPricingEditorPanelHandle,
+  ModelPricingEditorPanelProps
+>(function ModelPricingEditorPanel(
+  { editData, className, onSave, isSaving },
+  ref
+) {
   const { t } = useTranslation()
   const [pricingMode, setPricingMode] = useState<PricingMode>('per-token')
   const [promptPrice, setPromptPrice] = useState('')
@@ -752,7 +758,7 @@ export function ModelPricingEditorPanel({
     t,
   ])
 
-  const handleSubmit = (values: ModelPricingFormValues) => {
+  const validatePricingValues = useCallback(() => {
     if (
       pricingMode === 'per-token' &&
       toNumberOrNull(promptPrice) === null &&
@@ -763,7 +769,7 @@ export function ModelPricingEditorPanel({
       form.setError('ratio', {
         message: t('Input price is required before saving dependent prices.'),
       })
-      return
+      return false
     }
 
     if (
@@ -774,7 +780,7 @@ export function ModelPricingEditorPanel({
       form.setError('audioRatio', {
         message: t('Audio output price requires an audio input price.'),
       })
-      return
+      return false
     }
 
     if (
@@ -785,38 +791,69 @@ export function ModelPricingEditorPanel({
       form.setError('price', {
         message: t('At least one enabled resolution price is required.'),
       })
-      return
+      return false
     }
 
-    const data: ModelRatioData = {
-      name: values.name.trim(),
-      billingMode: pricingMode,
-      price: values.price || '',
-      ratio: values.ratio || '',
-      cacheRatio: values.cacheRatio || '',
-      createCacheRatio: values.createCacheRatio || '',
-      completionRatio: values.completionRatio || '',
-      imageRatio: values.imageRatio || '',
-      audioRatio: values.audioRatio || '',
-      audioCompletionRatio: values.audioCompletionRatio || '',
-    }
+    return true
+  }, [
+    form,
+    laneEnabled,
+    lanePrices,
+    perRequestRule,
+    perRequestSubtype,
+    pricingMode,
+    promptPrice,
+    t,
+  ])
 
-    if (pricingMode === 'tiered_expr') {
-      data.billingExpr = billingExpr
-      data.requestRuleExpr = requestRuleExpr
-    } else if (pricingMode === 'per-request') {
-      if (perRequestSubtype !== 'fixed') {
+  const buildSubmitData = useCallback(
+    (values: ModelPricingFormValues) => {
+      const data: ModelRatioData = {
+        name: values.name.trim(),
+        billingMode: pricingMode,
+        price: values.price || '',
+        ratio: values.ratio || '',
+        cacheRatio: values.cacheRatio || '',
+        createCacheRatio: values.createCacheRatio || '',
+        completionRatio: values.completionRatio || '',
+        imageRatio: values.imageRatio || '',
+        audioRatio: values.audioRatio || '',
+        audioCompletionRatio: values.audioCompletionRatio || '',
+      }
+
+      if (pricingMode === 'tiered_expr') {
+        data.billingExpr = billingExpr
+        data.requestRuleExpr = requestRuleExpr
+      } else if (pricingMode === 'per-request' && perRequestSubtype !== 'fixed') {
         data.price = ''
         data.perRequestRule = perRequestRule || undefined
       }
-    }
 
-    onSave(data)
-    form.reset()
-    onCancel?.()
-  }
+      return data
+    },
+    [
+      billingExpr,
+      perRequestRule,
+      perRequestSubtype,
+      pricingMode,
+      requestRuleExpr,
+    ]
+  )
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      commitDraft: async () => {
+        const isValid = await form.trigger()
+        if (!isValid || !validatePricingValues()) return null
+        return buildSubmitData(form.getValues())
+      },
+    }),
+    [form, validatePricingValues, buildSubmitData]
+  )
 
   const activeName = watchedValues.name || editData?.name || t('New model')
+  const showActions = Boolean(onSave)
 
   return (
     <div
@@ -843,7 +880,7 @@ export function ModelPricingEditorPanel({
 
       <Form {...form}>
         <form
-          onSubmit={form.handleSubmit(handleSubmit)}
+          onSubmit={(event) => event.preventDefault()}
           className='flex min-h-0 flex-1 flex-col'
           autoComplete='off'
         >
@@ -1015,32 +1052,28 @@ export function ModelPricingEditorPanel({
             </FieldGroup>
           </div>
 
-          <SheetFooter
-            className={sideDrawerFooterClassName(
-              'grid-cols-1 sm:items-center sm:justify-between'
-            )}
-          >
-            <div className='text-muted-foreground text-xs'>
-              {selectedTargetCount > 0
-                ? t('{{count}} selected targets available for bulk copy.', {
-                    count: selectedTargetCount,
-                  })
-                : t('Changes are written to the settings draft on save.')}
-            </div>
-            <div className='flex justify-end gap-2'>
-              <Button type='button' variant='outline' onClick={onCancel}>
-                {t('Cancel')}
-              </Button>
-              <Button type='submit'>
-                {isEditMode ? t('Update') : t('Add')}
-              </Button>
-            </div>
-          </SheetFooter>
+          {showActions && (
+            <SheetFooter
+              className={sideDrawerFooterClassName(
+                'grid-cols-1 sm:items-center sm:justify-between'
+              )}
+            >
+              <div className='text-muted-foreground text-xs'>
+                {t('Changes are written to the settings draft on save.')}
+              </div>
+              <div className='flex justify-end gap-2'>
+                <Button type='button' onClick={onSave} disabled={isSaving}>
+                  <Save data-icon='inline-start' />
+                  {isSaving ? t('Saving...') : t('Save model prices')}
+                </Button>
+              </div>
+            </SheetFooter>
+          )}
         </form>
       </Form>
     </div>
   )
-}
+})
 
 function PriceInput(props: {
   value: string
