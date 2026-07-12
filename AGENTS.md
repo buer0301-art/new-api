@@ -56,6 +56,16 @@ web/             — Frontend themes container
 
 ## Rules
 
+### Local Startup
+
+- When the user asks to start/run/launch the project, always start it locally by default.
+- Local startup means:
+  - Backend: run `PORT=3000 SQL_DSN= REDIS_CONN_STRING= go run main.go` from the repository root.
+  - Frontend: run `bun install --filter ./default` from `web/`, then `bun run dev -- --host 0.0.0.0 --port 5173` from `web/default/`.
+- Do not use Docker, Docker Compose, Postgres containers, Redis containers, or image builds for a plain "start the project" request.
+- Only use Docker-based startup when the user explicitly asks for Docker, containers, compose, Postgres/Redis stack testing, or production-like startup.
+- After startup, verify local availability with `http://localhost:3000/`, `http://localhost:3000/api/status`, and `http://localhost:5173/`.
+
 ### Common Code Quality
 
 - New code should stay direct and readable. Prefer early returns, clear branches, and well-named local variables to deep nesting or layered control flow.
