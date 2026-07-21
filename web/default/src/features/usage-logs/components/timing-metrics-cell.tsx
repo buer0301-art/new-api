@@ -99,9 +99,7 @@ export function TimingMetricsCell(props: TimingMetricsCellProps) {
           <span className='text-muted-foreground shrink-0'>
             {t('First token')}
           </span>
-          <span
-            className={cn('tabular-nums', textColorMap[firstTokenVariant])}
-          >
+          <span className={cn('tabular-nums', textColorMap[firstTokenVariant])}>
             {firstTokenLabel}
           </span>
         </div>
@@ -116,9 +114,7 @@ export function TimingMetricsCell(props: TimingMetricsCellProps) {
             )}
           />
         )}
-        <span className='text-muted-foreground shrink-0'>
-          {t('Duration')}
-        </span>
+        <span className='text-muted-foreground shrink-0'>{t('Duration')}</span>
         <span className={cn('tabular-nums', textColorMap[totalTimeVariant])}>
           {totalTimeLabel}
         </span>
@@ -128,9 +124,7 @@ export function TimingMetricsCell(props: TimingMetricsCellProps) {
 
   if (indicator === 'dot') {
     return (
-      <div className={cn('flex items-stretch', props.className)}>
-        {labels}
-      </div>
+      <div className={cn('flex items-stretch', props.className)}>{labels}</div>
     )
   }
 
@@ -212,6 +206,44 @@ export function StreamTpsCell(props: StreamTpsCellProps) {
       <span className='text-muted-foreground/60 px-0.5 tabular-nums'>
         {tpsLabel}
       </span>
+    </div>
+  )
+}
+
+interface StreamTimingMetricsCellProps extends Omit<
+  TimingMetricsCellProps,
+  'className'
+> {
+  streamStatus?: LogOtherData['stream_status']
+  className?: string
+}
+
+export function StreamTimingMetricsCell(props: StreamTimingMetricsCellProps) {
+  const indicator = props.indicator ?? 'bar'
+  const tokensPerSecond =
+    props.useTimeSec > 0 && props.completionTokens > 0
+      ? props.completionTokens / props.useTimeSec
+      : null
+
+  return (
+    <div className={cn('flex min-w-0 items-stretch gap-2', props.className)}>
+      <StreamTpsCell
+        isStream={props.isStream}
+        tokensPerSecond={tokensPerSecond}
+        streamStatus={props.streamStatus}
+        className='min-w-11'
+      />
+      {indicator === 'dot' && (
+        <span aria-hidden className='bg-border w-px shrink-0 self-stretch' />
+      )}
+      <TimingMetricsCell
+        useTimeSec={props.useTimeSec}
+        completionTokens={props.completionTokens}
+        frtMs={props.frtMs}
+        isStream={props.isStream}
+        indicator={indicator}
+        className='min-w-0'
+      />
     </div>
   )
 }

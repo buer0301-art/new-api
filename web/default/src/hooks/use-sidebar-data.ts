@@ -26,6 +26,7 @@ import {
   LayoutDashboard,
   ListTodo,
   MessageSquare,
+  PanelTop,
   Radio,
   ServerCog,
   Settings,
@@ -37,7 +38,9 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { type SidebarData } from '@/components/layout/types'
+import type { SidebarData } from '@/components/layout/types'
+import { parseCustomSidebarMenus } from '@/features/custom-sidebar-menu/lib/custom-sidebar-menus'
+import { useStatus } from '@/hooks/use-status'
 import { ROLE } from '@/lib/roles'
 
 /**
@@ -48,6 +51,8 @@ import { ROLE } from '@/lib/roles'
  */
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
+  const { status } = useStatus()
+  const customMenus = parseCustomSidebarMenus(status?.CustomSidebarMenus)
 
   return {
     navGroups: [
@@ -65,6 +70,11 @@ export function useSidebarData(): SidebarData {
             icon: MessageSquare,
             type: 'chat-presets',
           },
+          ...customMenus.map((menu, index) => ({
+            title: menu.title,
+            url: `/custom-menu/${index}`,
+            icon: PanelTop,
+          })),
         ],
       },
       {

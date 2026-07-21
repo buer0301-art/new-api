@@ -233,24 +233,21 @@ export function CommonLogsFilterBar<TData>(
     [handleApply]
   )
 
-  const hasExpandedFilters =
-    !!filters.token ||
-    !!filters.username ||
-    !!filters.channel ||
-    !!filters.requestId ||
-    !!filters.upstreamRequestId
-
   const hasTypeFilter = logType !== LOG_TYPE_ALL_VALUE
-  const hasAdditionalFilters =
-    !!filters.model || !!filters.group || hasTypeFilter || hasExpandedFilters
-
-  const expandedFilterCount = [
-    filters.token,
-    isAdmin ? filters.username : undefined,
-    isAdmin ? filters.channel : undefined,
+  const advancedFilterCount = [
+    filters.model,
+    filters.group,
+    hasTypeFilter,
     filters.requestId,
     filters.upstreamRequestId,
   ].filter(Boolean).length
+  const hasAdvancedFilters = advancedFilterCount > 0
+  const hasAdditionalFilters =
+    !!filters.token ||
+    (isAdmin && !!filters.username) ||
+    (isAdmin && !!filters.channel) ||
+    hasAdvancedFilters
+
   const sensitiveType = sensitiveVisible ? 'text' : 'password'
   const logTypeItems = useMemo(
     () =>
@@ -290,7 +287,7 @@ export function CommonLogsFilterBar<TData>(
   )
 
   const dateRangeFilter = (
-    <LogsFilterField wide>
+    <LogsFilterField wide className='xl:col-span-1'>
       <CompactDateTimeRangePicker
         start={filters.startTime}
         end={filters.endTime}
@@ -301,6 +298,38 @@ export function CommonLogsFilterBar<TData>(
       />
     </LogsFilterField>
   )
+  const usernameFilter = isAdmin ? (
+    <LogsFilterField>
+      <LogsFilterInput
+        placeholder={t('Username')}
+        type={sensitiveType}
+        value={filters.username || ''}
+        onChange={(e) => handleChange('username', e.target.value)}
+        onKeyDown={handleKeyDown}
+      />
+    </LogsFilterField>
+  ) : null
+  const tokenFilter = (
+    <LogsFilterField>
+      <LogsFilterInput
+        placeholder={t('Token Name')}
+        type={sensitiveType}
+        value={filters.token || ''}
+        onChange={(e) => handleChange('token', e.target.value)}
+        onKeyDown={handleKeyDown}
+      />
+    </LogsFilterField>
+  )
+  const channelFilter = isAdmin ? (
+    <LogsFilterField>
+      <LogsFilterInput
+        placeholder={t('Channel ID')}
+        value={filters.channel || ''}
+        onChange={(e) => handleChange('channel', e.target.value)}
+        onKeyDown={handleKeyDown}
+      />
+    </LogsFilterField>
+  ) : null
   const modelFilter = (
     <LogsFilterField>
       <LogsFilterInput
@@ -360,36 +389,9 @@ export function CommonLogsFilterBar<TData>(
   )
   const advancedFilters = (
     <>
-      <LogsFilterField>
-        <LogsFilterInput
-          placeholder={t('Token Name')}
-          type={sensitiveType}
-          value={filters.token || ''}
-          onChange={(e) => handleChange('token', e.target.value)}
-          onKeyDown={handleKeyDown}
-        />
-      </LogsFilterField>
-      {isAdmin && (
-        <LogsFilterField>
-          <LogsFilterInput
-            placeholder={t('Username')}
-            type={sensitiveType}
-            value={filters.username || ''}
-            onChange={(e) => handleChange('username', e.target.value)}
-            onKeyDown={handleKeyDown}
-          />
-        </LogsFilterField>
-      )}
-      {isAdmin && (
-        <LogsFilterField>
-          <LogsFilterInput
-            placeholder={t('Channel ID')}
-            value={filters.channel || ''}
-            onChange={(e) => handleChange('channel', e.target.value)}
-            onKeyDown={handleKeyDown}
-          />
-        </LogsFilterField>
-      )}
+      {modelFilter}
+      {groupFilter}
+      {typeFilter}
       <LogsFilterField>
         <LogsFilterInput
           placeholder={t('Request ID')}
@@ -414,30 +416,39 @@ export function CommonLogsFilterBar<TData>(
       table={props.table}
       stats={statsBar}
       actionStart={sensitiveToggle}
+      primaryFiltersClassName='xl:grid-cols-[minmax(21rem,1.4fr)_repeat(auto-fit,minmax(10rem,1fr))]'
       primaryFilters={
         <>
           {dateRangeFilter}
-          {modelFilter}
-          {groupFilter}
-          {typeFilter}
+          {usernameFilter}
+          {tokenFilter}
+          {channelFilter}
         </>
       }
       advancedFilters={advancedFilters}
       mobilePinnedFilters={dateRangeFilter}
       mobileFilters={
         <>
-          {modelFilter}
-          {groupFilter}
-          {typeFilter}
+          {usernameFilter}
+          {tokenFilter}
+          {channelFilter}
           {advancedFilters}
         </>
       }
       mobileFilterCount={
-        [filters.model, filters.group, hasTypeFilter].filter(Boolean).length +
-        expandedFilterCount
+        [
+          isAdmin ? filters.username : undefined,
+          filters.token,
+          isAdmin ? filters.channel : undefined,
+          filters.model,
+          filters.group,
+          hasTypeFilter,
+          filters.requestId,
+          filters.upstreamRequestId,
+        ].filter(Boolean).length
       }
-      hasAdvancedActiveFilters={hasExpandedFilters}
-      advancedFilterCount={expandedFilterCount}
+      hasAdvancedActiveFilters={hasAdvancedFilters}
+      advancedFilterCount={advancedFilterCount}
       hasActiveFilters={hasAdditionalFilters}
       onSearch={handleApply}
       searchLoading={fetchingLogs > 0}

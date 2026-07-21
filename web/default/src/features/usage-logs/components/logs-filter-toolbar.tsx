@@ -53,6 +53,7 @@ interface LogsFilterToolbarProps<TData> {
   onReset: () => void
   onSearch: () => void
   className?: string
+  primaryFiltersClassName?: string
 }
 
 interface LogsFilterFieldProps {
@@ -156,11 +157,11 @@ export function LogsFilterToolbar<TData>(props: LogsFilterToolbarProps<TData>) {
                 type='button'
                 variant='ghost'
                 size='icon'
-                onClick={() => setMobilePanelCollapsed((collapsed) => !collapsed)}
-                aria-expanded={!mobilePanelCollapsed}
-                aria-label={
-                  mobilePanelCollapsed ? t('Expand') : t('Collapse')
+                onClick={() =>
+                  setMobilePanelCollapsed((collapsed) => !collapsed)
                 }
+                aria-expanded={!mobilePanelCollapsed}
+                aria-label={mobilePanelCollapsed ? t('Expand') : t('Collapse')}
                 className='text-muted-foreground hover:text-foreground mr-auto size-7'
               >
                 <ChevronDown
@@ -250,7 +251,12 @@ export function LogsFilterToolbar<TData>(props: LogsFilterToolbarProps<TData>) {
       )}
     >
       <div className='flex flex-wrap items-start gap-2'>
-        <div className='grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]'>
+        <div
+          className={cn(
+            'grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]',
+            props.primaryFiltersClassName
+          )}
+        >
           {props.primaryFilters}
         </div>
         {advancedToggle && (

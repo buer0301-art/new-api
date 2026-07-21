@@ -47,7 +47,7 @@ import {
   isTimingLogType,
 } from '../lib/utils'
 import type { LogCategory } from '../types'
-import { StreamTpsCell, TimingMetricsCell } from './timing-metrics-cell'
+import { StreamTimingMetricsCell } from './timing-metrics-cell'
 import { useUsageLogsContext } from './usage-logs-provider'
 
 const logTypeRowTint: Record<number, string> = {
@@ -283,28 +283,17 @@ function MobileStreamTimingField({ log }: { log: UsageLog }) {
 
   const other = parseLogOther(log.other)
   const useTime = log.use_time || 0
-  const tokensPerSecond =
-    useTime > 0 && log.completion_tokens > 0
-      ? log.completion_tokens / useTime
-      : null
 
   return (
-    <div className='bg-muted/20 flex min-w-0 items-center gap-2.5 rounded-md px-2 py-1.5'>
-      <TimingMetricsCell
-        useTimeSec={useTime}
-        completionTokens={log.completion_tokens}
-        frtMs={other?.frt}
-        isStream={log.is_stream}
-        indicator='dot'
-        className='min-w-0 flex-1'
-      />
-      <StreamTpsCell
-        isStream={log.is_stream}
-        tokensPerSecond={tokensPerSecond}
-        streamStatus={other?.stream_status}
-        className='shrink-0'
-      />
-    </div>
+    <StreamTimingMetricsCell
+      useTimeSec={useTime}
+      completionTokens={log.completion_tokens}
+      frtMs={other?.frt}
+      isStream={log.is_stream}
+      streamStatus={other?.stream_status}
+      indicator='dot'
+      className='bg-muted/20 rounded-md px-2 py-1.5'
+    />
   )
 }
 
@@ -388,8 +377,16 @@ function TaskLogsCard<TData>({
       </div>
 
       <div className='grid grid-cols-2 gap-1.5'>
-        <SummaryField label={t('Submit Time')} cell={submitTimeCell} />
-        <SummaryField label={t('User')} cell={cells.get('user')} primaryOnly />
+        <SummaryField label={t('Time')} cell={submitTimeCell} />
+        <SummaryField label={t('Duration')} cell={cells.get('duration')} />
+        <SummaryField
+          label={`${t('Channel')} / ${t('User')}`}
+          cell={cells.get('source')}
+        />
+        <SummaryField
+          label={`${t('Platform')} / ${t('Type')}`}
+          cell={cells.get('platform')}
+        />
         <SummaryField
           label={t('Result')}
           cell={cells.get('fail_reason')}

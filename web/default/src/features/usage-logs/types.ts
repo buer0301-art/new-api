@@ -225,6 +225,18 @@ export interface LogOtherData {
   is_task?: boolean
   task_id?: string
   reason?: string
+  pre_consumed_quota?: number
+  actual_quota?: number
+  // Video request metadata
+  media_type?: string
+  video_duration?: number | string
+  video_resolution?: string
+  video_ratio?: string
+  video_size?: string
+  video_fps?: number | string
+  video_frames?: number | string
+  video_seed?: number | string
+  video_service_tier?: string
   // Subscription billing fields
   subscription_plan_id?: string
   subscription_plan_title?: string
@@ -293,8 +305,9 @@ export interface TaskLog {
   finish_time?: number // seconds
   progress?: string
   progress_message_en?: string
-  data?: string // JSON string
+  data?: unknown
   fail_reason?: string
+  result_url?: string
   status: string // NOT_START, SUBMITTED, IN_PROGRESS, SUCCESS, FAILURE, QUEUED, UNKNOWN
   other?: string
   created_at?: number

@@ -35,6 +35,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
 import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 import { formatLogQuota, formatTimestampToDate } from '@/lib/format'
@@ -59,7 +60,7 @@ import {
 import type { LogOtherData } from '../../types'
 import { DetailsDialog } from '../dialogs/details-dialog'
 import { ModelBadge } from '../model-badge'
-import { TimingMetricsCell, StreamTpsCell } from '../timing-metrics-cell'
+import { StreamTimingMetricsCell } from '../timing-metrics-cell'
 import { useUsageLogsContext } from '../usage-logs-provider'
 
 interface DetailSegment {
@@ -490,6 +491,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         cell: function UserCell({ row }) {
           const { sensitiveVisible, setSelectedUserId, setUserInfoDialogOpen } =
             useUsageLogsContext()
+          const { copyToClipboard } = useCopyToClipboard()
           const log = row.original
 
           if (!log.username) return null
@@ -500,6 +502,12 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
               className='flex items-center gap-1.5 text-left'
               onClick={(e) => {
                 e.stopPropagation()
+                if (
+                  e.target instanceof Element &&
+                  e.target.closest('[data-username-copy]')
+                ) {
+                  return
+                }
                 setSelectedUserId(log.user_id)
                 setUserInfoDialogOpen(true)
               }}
@@ -523,7 +531,19 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                 <Tooltip>
                   <TooltipTrigger
                     render={
-                      <span className='text-muted-foreground max-w-[100px] truncate text-sm hover:underline' />
+                      <span
+                        data-username-copy
+                        className={cn(
+                          'text-muted-foreground max-w-[100px] truncate text-sm',
+                          sensitiveVisible && 'cursor-copy select-none'
+                        )}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation()
+                          if (sensitiveVisible) {
+                            void copyToClipboard(log.username)
+                          }
+                        }}
+                      />
                     }
                   >
                     {sensitiveVisible ? log.username : '••••'}
@@ -622,30 +642,6 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         )
       },
       meta: { mobileTitle: true },
-    },
-    {
-      accessorKey: 'is_stream',
-      header: t('Stream'),
-      cell: ({ row }) => {
-        const log = row.original
-        if (!isTimingLogType(log.type)) return null
-
-        const useTime = row.getValue('use_time') as number
-        const other = parseLogOther(log.other)
-        const tokensPerSecond =
-          useTime > 0 && log.completion_tokens > 0
-            ? log.completion_tokens / useTime
-            : null
-
-        return (
-          <StreamTpsCell
-            isStream={log.is_stream}
-            tokensPerSecond={tokensPerSecond}
-            streamStatus={other?.stream_status}
-          />
-        )
-      },
-      meta: { label: t('Stream') },
     },
     {
       accessorKey: 'prompt_tokens',
@@ -748,7 +744,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
 
     {
       accessorKey: 'use_time',
-      header: t('Timing'),
+      header: `${t('Stream')}/${t('Duration')}`,
       cell: ({ row }) => {
         const log = row.original
         if (!isTimingLogType(log.type)) return null
@@ -757,14 +753,17 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         const other = parseLogOther(log.other)
 
         return (
-          <TimingMetricsCell
+          <StreamTimingMetricsCell
             useTimeSec={useTime}
             completionTokens={log.completion_tokens}
             frtMs={other?.frt}
             isStream={log.is_stream}
+            streamStatus={other?.stream_status}
           />
         )
       },
+      meta: { label: `${t('Stream')}/${t('Duration')}` },
+      size: 180,
     },
 
     {

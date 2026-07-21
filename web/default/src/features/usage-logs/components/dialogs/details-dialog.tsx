@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import type { TFunction } from 'i18next'
 import {
   Copy,
   Check,
@@ -31,7 +32,6 @@ import {
   Info,
   LogIn,
 } from 'lucide-react'
-import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '@/components/dialog'
@@ -58,6 +58,7 @@ import {
   getResponseTimeColor,
   renderAuditContent,
 } from '../../lib/format'
+import { getTaskSettlement, getVideoDetailFields } from '../../lib/log-details'
 import {
   getLogTypeConfig,
   isPerCallBilling,
@@ -179,7 +180,9 @@ function getUsageBillingPathLabel(
   }
 }
 
-function isUsageBillingPathLocal(adminInfo: LogOtherData['admin_info']): boolean {
+function isUsageBillingPathLocal(
+  adminInfo: LogOtherData['admin_info']
+): boolean {
   if (adminInfo?.usage_billing_path) {
     return adminInfo.usage_billing_path === USAGE_BILLING_PATH.LOCAL
   }
@@ -193,6 +196,29 @@ function quotaSaturationKindLabel(
   if (kind === 'overflow') return t('Overflow')
   if (kind === 'underflow') return t('Underflow')
   return t('Invalid (NaN)')
+}
+
+function getVideoDetailLabel(label: string, t: TFunction): string {
+  switch (label) {
+    case 'Video length in seconds':
+      return t('Video length in seconds')
+    case 'Video resolution':
+      return t('Video resolution')
+    case 'Video aspect ratio':
+      return t('Video aspect ratio')
+    case 'Video size':
+      return t('Video size')
+    case 'Frame rate':
+      return t('Frame rate')
+    case 'Frame count':
+      return t('Frame count')
+    case 'Seed':
+      return t('Seed')
+    case 'Service Tier':
+      return t('Service Tier')
+    default:
+      return label
+  }
 }
 
 function BillingBreakdown(props: {
@@ -462,10 +488,20 @@ export function DetailsDialog(props: DetailsDialogProps) {
   const details = props.log.content ?? ''
   const other = parseLogOther(props.log.other)
   const typeConfig = getLogTypeConfig(props.log.type)
+  const taskSettlement = getTaskSettlement(other)
+  const videoDetailFields = getVideoDetailFields(other)
+  let displayTypeLabel: string = typeConfig.label
+  let displayTypeVariant = typeConfig.color as StatusBadgeProps['variant']
+  if (taskSettlement?.direction === 'refund') {
+    const refundTypeConfig = getLogTypeConfig(6)
+    displayTypeLabel = refundTypeConfig.label
+    displayTypeVariant = refundTypeConfig.color as StatusBadgeProps['variant']
+  }
 
   const isViolation = isViolationFeeLog(other)
-  const isRefund = props.log.type === 6
-  const isConsume = props.log.type === 2
+  const isRefund =
+    props.log.type === 6 || taskSettlement?.direction === 'refund'
+  const isConsume = props.log.type === 2 && !isRefund
   const isTopup = props.log.type === 1
   const isManage = props.log.type === 3
   const isSubscription = other?.billing_source === 'subscription'
@@ -578,7 +614,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
       : conversionChain.join(' -> ')
   const showConversion =
     props.isAdmin &&
-    props.log.type !== 6 &&
+    !isRefund &&
     (other?.request_path || conversionChain.length > 0)
 
   const useChannel = other?.admin_info?.use_channel
@@ -599,8 +635,8 @@ export function DetailsDialog(props: DetailsDialogProps) {
         <>
           {t('Log Details')}
           <StatusBadge
-            label={t(typeConfig.label)}
-            variant={typeConfig.color as StatusBadgeProps['variant']}
+            label={t(displayTypeLabel)}
+            variant={displayTypeVariant}
             size='sm'
             copyable={false}
           />
@@ -846,6 +882,43 @@ export function DetailsDialog(props: DetailsDialogProps) {
           </DetailSection>
         )}
 
+        {taskSettlement && (
+          <DetailSection label={t('Task Settlement')}>
+            <DetailRow
+              label={t('Pre-consumed')}
+              value={formatLogQuota(taskSettlement.preConsumedQuota)}
+              mono
+            />
+            <DetailRow
+              label={t('Final Consumed')}
+              value={formatLogQuota(taskSettlement.actualQuota)}
+              mono
+            />
+            <DetailRow
+              label={
+                taskSettlement.direction === 'refund'
+                  ? t('Refund')
+                  : t('Additional Charge')
+              }
+              value={formatLogQuota(taskSettlement.deltaQuota)}
+              mono
+            />
+          </DetailSection>
+        )}
+
+        {videoDetailFields.length > 0 && (
+          <DetailSection label={t('Video Details')}>
+            {videoDetailFields.map((field) => (
+              <DetailRow
+                key={field.label}
+                label={getVideoDetailLabel(field.label, t)}
+                value={field.value}
+                mono
+              />
+            ))}
+          </DetailSection>
+        )}
+
         {/* Top-up audit info (type=1, admin only) */}
         {showTopupAuditSection && (
           <DetailSection
@@ -1066,26 +1139,23 @@ export function DetailsDialog(props: DetailsDialogProps) {
         )}
 
         {/* Admin billing mode indicator for non-consume */}
-        {props.isAdmin &&
-          !isConsume &&
-          props.log.type !== 6 &&
-          other?.admin_info && (
-            <DetailRow
-              label={t('Billing Path')}
-              value={
-                <span className='flex items-center gap-1'>
-                  {isUsageBillingPathLocal(other.admin_info) ? (
-                    <Monitor className='size-3 text-blue-500' />
-                  ) : (
-                    <Cloud className='size-3 text-emerald-500' />
-                  )}
-                  <span className='text-xs'>
-                    {getUsageBillingPathLabel(t, other.admin_info)}
-                  </span>
+        {props.isAdmin && !isConsume && !isRefund && other?.admin_info && (
+          <DetailRow
+            label={t('Billing Path')}
+            value={
+              <span className='flex items-center gap-1'>
+                {isUsageBillingPathLocal(other.admin_info) ? (
+                  <Monitor className='size-3 text-blue-500' />
+                ) : (
+                  <Cloud className='size-3 text-emerald-500' />
+                )}
+                <span className='text-xs'>
+                  {getUsageBillingPathLabel(t, other.admin_info)}
                 </span>
-              }
-            />
-          )}
+              </span>
+            }
+          />
+        )}
 
         {/* Stream status details (admin only) */}
         {props.isAdmin &&
